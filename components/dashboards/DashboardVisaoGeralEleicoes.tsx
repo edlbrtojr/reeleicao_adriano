@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { createClient } from '@/utils/supabase/client';
+import { supabase } from '@/utils/supabase/client';  // Use shared client
 import { Card, CardContent } from '@/components/ui/card';
 import { ResponsiveContainer, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Bar } from 'recharts';
 import { formatNumber } from '@/utils/formatNumber';
@@ -19,7 +19,7 @@ interface Candidato {
 }
 
 interface Filters {
-    selectedYear: string | null;
+    selectedYear: number | null;
     selectedView: string;
     selectedCargo: string | null;
     selectedMunicipio?: string | null;
@@ -37,6 +37,27 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value }) => (
     </Card>
 );
 
+interface MetricData {
+    votosTotais: number;
+    votosEmBranco: number;
+    votosNulos: number;
+    aptosVotar: number;
+    abstencoes: number;
+}
+
+interface PartidoData {
+    partido: string;
+    total_votos: number;
+}
+
+// Add error interface
+interface SupabaseError {
+    message?: string;
+    details?: string;
+    hint?: string;
+    code?: string;
+}
+
 const DashboardVisaoGeralEleicoes = ({ filters }: { filters: Filters }) => {
     const [data, setData] = useState<{ partido: string; votos: number }[]>([]);
     const [loading, setLoading] = useState(true);
@@ -44,106 +65,86 @@ const DashboardVisaoGeralEleicoes = ({ filters }: { filters: Filters }) => {
     const [topMunicipio, setTopMunicipio] = useState<string>('');
     const [percentByCargo, setPercentByCargo] = useState<{ ds_cargo: string; percentual: number }[]>([]);
     const [totalExpenses, setTotalExpenses] = useState<string>('');
-    const supabase = createClient();
-
-    // Re-introduce a function to apply filters
-    const applyFilters = (votos: Voto[], candidatos: Candidato[], filters: Filters) => {
-        let filteredVotos = votos;
-        let filteredCandidatos = candidatos;
-
-        if (filters.selectedYear) {
-            filteredVotos = filteredVotos.filter(v => v.ano_eleicao === filters.selectedYear);
-        }
-        if (filters.selectedCargo) {
-            filteredCandidatos = filteredCandidatos.filter(c => c.cd_cargo === filters.selectedCargo);
-        }
-        if (filters.selectedMunicipio) {
-            filteredVotos = filteredVotos.filter(v => v.cd_municipio === filters.selectedMunicipio);
-        }
-
-        const candidatoMap = filteredCandidatos.reduce((acc, candidato) => {
-            acc[candidato.sq_candidato] = candidato;
-            return acc;
-        }, {} as Record<number, Candidato>);
-
-        const aggregated = filteredVotos.reduce((acc, voto) => {
-            const candidato = candidatoMap[voto.sq_candidato];
-            if (candidato) {
-                const existing = acc.find(item => item.partido === candidato.sg_partido);
-                if (existing) {
-                    existing.votos += voto.qt_votos;
-                } else {
-                    acc.push({ partido: candidato.sg_partido, votos: voto.qt_votos });
-                }
-            }
-            return acc;
-        }, [] as { partido: string; votos: number }[])
-        .sort((a, b) => b.votos - a.votos)
-        .slice(0, 10);
-
-        return aggregated;
-    };
+    const [metrics, setMetrics] = useState<MetricData>({
+        votosTotais: 0,
+        votosEmBranco: 0,
+        votosNulos: 0,
+        aptosVotar: 0,
+        abstencoes: 0
+    });
 
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                // Check cache
-                const cachedVotos = localStorage.getItem('allVotos');
-                const cachedCandidatos = localStorage.getItem('allCandidatos');
-
-                let allVotos: Voto[] = [];
-                let allCandidatos: Candidato[] = [];
-
-                if (cachedVotos && cachedCandidatos) {
-                    allVotos = JSON.parse(cachedVotos);
-                    allCandidatos = JSON.parse(cachedCandidatos);
-                } else {
-                    const { data: votosData } = await supabase
-                        .from('votos')
-                        .select('sq_candidato, qt_votos, ano_eleicao, cd_municipio');
-                    const { data: candidatosData } = await supabase
-                        .from('candidatos')
-                        .select('sq_candidato, sg_partido, cd_cargo');
-
-                    allVotos = votosData || [];
-                    allCandidatos = candidatosData || [];
-
-                    // Store data
-                    localStorage.setItem('allVotos', JSON.stringify(allVotos));
-                    localStorage.setItem('allCandidatos', JSON.stringify(allCandidatos));
+                if (!filters.selectedYear) {
+                    setMetrics({
+                        votosTotais: 0,
+                        votosEmBranco: 0,
+                        votosNulos: 0,
+                        aptosVotar: 0,
+                        abstencoes: 0
+                    });
+                    setData([]);
+                    return;
                 }
 
-                const filteredData = applyFilters(allVotos, allCandidatos, filters);
-                setData(filteredData);
+                // Convert to integer for the RPC call
+                const yearInt = parseInt(filters.selectedYear.toString(), 10);
 
-                // Fetch metrics
-                const { data: totalVotesData } = await supabase.rpc('total_votes');
-                const { data: topMunicipioData } = await supabase.rpc('top_municipio');
-                const { data: percentByCargoData } = await supabase.rpc('percent_by_cargo');
-                const { data: totalExpensesData } = await supabase.rpc('total_expenses');
+                // Get metrics and partidos data concurrently
+                const [metricsResponse, partidosResponse] = await Promise.all([
+                    supabase.rpc('get_eleicao_metrics', { ano_param: yearInt }),
+                    supabase.rpc('get_top_partidos_by_year', { ano_param: yearInt })
+                ]);
 
-                if (totalVotesData && totalVotesData.length > 0) {
-                    setTotalVotes(formatNumber(totalVotesData[0].sum, 'K'));
+                if (metricsResponse.error) throw metricsResponse.error;
+                if (partidosResponse.error) throw partidosResponse.error;
+
+                // Update metrics state
+                if (metricsResponse.data?.[0]) {
+                    setMetrics({
+                        votosTotais: metricsResponse.data[0].votos_totais ?? 0,
+                        votosEmBranco: metricsResponse.data[0].votos_brancos ?? 0,
+                        votosNulos: metricsResponse.data[0].votos_nulos ?? 0,
+                        aptosVotar: metricsResponse.data[0].aptos_votar ?? 0,
+                        abstencoes: metricsResponse.data[0].abstencoes ?? 0
+                    });
                 }
-                if (topMunicipioData && topMunicipioData.length > 0) {
-                    setTopMunicipio(topMunicipioData[0].nm_municipio);
+
+                // Update chart data
+                if (partidosResponse.data) {
+                    setData(partidosResponse.data.map((item: PartidoData) => ({
+                        partido: item.partido,
+                        votos: Number(item.total_votos)
+                    })));
                 }
-                if (percentByCargoData) {
-                    setPercentByCargo(percentByCargoData);
-                }
-                if (totalExpensesData && totalExpensesData.length > 0) {
-                    setTotalExpenses(formatNumber(totalExpensesData[0].sum, 'M'));
-                }
-            } catch (error) {
-                console.error('Erro ao buscar dados:', error);
+
+            } catch (error: unknown) {
+                console.error('Error fetching data:', error);
+                const supabaseError = error as SupabaseError;
+                console.error('Detailed error:', {
+                    message: supabaseError.message || 'Unknown error',
+                    details: supabaseError.details || 'No details available',
+                    hint: supabaseError.hint || 'No hint available',
+                    code: supabaseError.code || 'No error code'
+                });
+                
+                setMetrics({
+                    votosTotais: 0,
+                    votosEmBranco: 0,
+                    votosNulos: 0,
+                    aptosVotar: 0,
+                    abstencoes: 0
+                });
+                setData([]);
             } finally {
                 setLoading(false);
             }
         };
 
         fetchData();
-    }, [filters]); // Run whenever filters change
+    }, [filters]);
 
     // Renderização enquanto os dados estão carregando
     if (loading) {
@@ -153,28 +154,55 @@ const DashboardVisaoGeralEleicoes = ({ filters }: { filters: Filters }) => {
     // Renderiza o gráfico e as métricas
     return (
         <div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                <MetricCard title="VOTOS TOTAIS" value={totalVotes} />
-                <MetricCard title="TEVE MAIS VOTOS EM" value={topMunicipio} />
-                <MetricCard title="% DE VOTOS POR CARGO" value={percentByCargo.map(cargo => `${cargo.ds_cargo}: ${cargo.percentual.toFixed(2)}%`).join(', ')} />
-                <MetricCard title="DESPESAS/GASTOS" value={totalExpenses} />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+                <MetricCard title="VOTOS TOTAIS" value={metrics.votosTotais.toString()} />
+                <MetricCard title="VOTOS EM BRANCO" value={metrics.votosEmBranco.toString()} />
+                <MetricCard title="VOTOS NULOS" value={metrics.votosNulos.toString()} />
+                <MetricCard title="APTOS A VOTAR" value={metrics.aptosVotar.toString()} />
+                <MetricCard title="ABSTENÇÕES" value={metrics.abstencoes.toString()} />
             </div>
             <Card>
-                <CardContent>
+                <CardContent className="pt-6">
+                    <h3 className="text-xl font-semibold mb-4">Votos por Partido</h3>
                     <ResponsiveContainer width="100%" height={400}>
                         <BarChart
                             data={data}
                             layout="vertical"
                             margin={{
-                                top: 20, right: 30, left: 20, bottom: 5,
+                                top: 5,
+                                right: 30,
+                                left: 80,
+                                bottom: 5,
                             }}
                         >
-                            <CartesianGrid strokeDasharray="3 4" />
-                            <XAxis type="number" dataKey="votos" />
-                            <YAxis dataKey="partido" type="category" />
-                            <Tooltip />
-                            <Legend />
-                            <Bar dataKey="votos" fill="#8884d8" />
+                            <CartesianGrid strokeDasharray="3 3" horizontal={true} />
+                            <XAxis
+                                type="number"
+                                tickFormatter={(value) => value.toLocaleString('pt-BR')}
+                            />
+                            <YAxis
+                                dataKey="partido"
+                                type="category"
+                                width={70}
+                                style={{ fontSize: '0.8rem' }}
+                            />
+                            <Tooltip
+                                formatter={(value) => [
+                                    value.toLocaleString('pt-BR'),
+                                    'Votos'
+                                ]}
+                                labelStyle={{ color: 'black' }}
+                            />
+                            <Bar
+                                dataKey="votos"
+                                fill="#8884d8"
+                                label={{
+                                    position: 'right',
+                                    formatter: (value: number) => value.toLocaleString('pt-BR'),
+                                    fill: '#666',
+                                    fontSize: 12
+                                }}
+                            />
                         </BarChart>
                     </ResponsiveContainer>
                 </CardContent>
