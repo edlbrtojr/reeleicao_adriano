@@ -41,16 +41,15 @@ export default function RootLayout({
           defaultTheme="light"
           disableTransitionOnChange
         >
-          {/* Define o conteúdo principal da página */}
           <SidebarProvider>
 
             <AppSidebar />
             <SidebarTrigger />
 
-          {children}
+            {children}
 
           </SidebarProvider>
-          </ThemeProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
