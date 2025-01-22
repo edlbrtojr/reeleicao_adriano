@@ -36,7 +36,6 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
     const supabase = createClientComponentClient();
     const [candidateSearch, setCandidateSearch] = useState<string>('');
     const [selectedYear, setSelectedYear] = useState<number>(2022); // Default to 2022
-    const [selectedView, setSelectedView] = useState<string>(''); // Initialize to empty string
     const [selectedCargo, setSelectedCargo] = useState<number | null>(null); // Initialize to null
     const [selectedMunicipio, setSelectedMunicipio] = useState<number | null>(null); // Initialize to null
     const [cargos, setCargos] = useState<{ cd_cargo: number, ds_cargo: string }[]>([]);
@@ -74,7 +73,7 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
 
     useEffect(() => {
         // Apply initial filters
-        onChange({ selectedYear, selectedView, selectedCargo, selectedMunicipio });
+        onChange({ selectedYear, selectedCargo, selectedMunicipio });
     }, [selectedMunicipio]); // Add selectedMunicipio as dependency
 
     useEffect(() => {
@@ -164,18 +163,6 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
         setSelectedYear(year);
         onChange({ 
             selectedYear: year, 
-            selectedView, 
-            selectedCargo, 
-            selectedMunicipio,
-            candidateSearch // Add this to preserve candidate search
-        });
-    };
-
-    const handleViewChange = (view: string) => {
-        setSelectedView(view);
-        onChange({ 
-            selectedYear, 
-            selectedView: view, 
             selectedCargo, 
             selectedMunicipio,
             candidateSearch // Add this to preserve candidate search
@@ -187,7 +174,6 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
         setSelectedCargo(selectedCargoCode);
         onChange({ 
             selectedYear, 
-            selectedView, 
             selectedCargo: selectedCargoCode, 
             selectedMunicipio,
             candidateSearch // Add this to preserve candidate search
@@ -199,7 +185,6 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
         setSelectedMunicipio(selectedMunicipioCode);
         onChange({ 
             selectedYear, 
-            selectedView, 
             selectedCargo, 
             selectedMunicipio: selectedMunicipioCode,
             candidateSearch // Add this to preserve candidate search
@@ -210,7 +195,6 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
         setSelectedCargo(null);
         onChange({ 
             selectedYear, 
-            selectedView, 
             selectedCargo: null, 
             selectedMunicipio,
             candidateSearch // Add this to preserve candidate search
@@ -221,7 +205,6 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
         setSelectedMunicipio(null);
         onChange({ 
             selectedYear, 
-            selectedView, 
             selectedCargo, 
             selectedMunicipio: null,
             candidateSearch // Add this to preserve candidate search
@@ -234,7 +217,6 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
                 setSelectedYear(2022);
                 onChange({ 
                     selectedYear: 2022, 
-                    selectedView, 
                     selectedCargo, 
                     selectedMunicipio,
                     candidateSearch // Add this to preserve candidate search
@@ -250,7 +232,6 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
                 setCandidateSearch('');
                 onChange({ 
                     selectedYear, 
-                    selectedView, 
                     selectedCargo, 
                     selectedMunicipio,
                     candidateSearch: '' // Clear the candidate search
@@ -301,7 +282,6 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
                                                 setOpen(false);
                                                 onChange({
                                                     selectedYear,
-                                                    selectedView,
                                                     selectedCargo,
                                                     selectedMunicipio,
                                                     candidateSearch: candidate.nm_urna_candidato

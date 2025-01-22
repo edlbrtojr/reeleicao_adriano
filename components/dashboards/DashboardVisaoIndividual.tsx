@@ -7,6 +7,7 @@ import { formatNumber } from '@/utils/formatNumber';
 import { Badge } from '../ui/badge';
 import CandidateStats from '@/components/CandidateStats'; // Import CandidateStats component
 import { MunicipiosTable, BairrosTable } from '../dashboardTables'; // Add import for tables
+import MapComponent from '../MapComponent';
 
 // Update Props interface with default values
 interface Props {
@@ -108,12 +109,12 @@ const DashboardVisaoIndividual: React.FC<Props> = ({ filters = {} }) => {
     }
 
     return (
-        <div className='mt-4 w-full '>
-            <div className=' grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 '>
-
+        <div className='mt-4 w-full'>
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4'>
+                {/* First card */}
                 <Card 
                     key={candidato.nr_candidato.toString()} 
-                    className="bg-white dark:bg-gray-800 shadow rounded-lg p-2 w-full max-w-[700px] justify-self-start"
+                    className="bg-white dark:bg-gray-800 shadow rounded-lg min-w-[700px] p-2 justify-items-center justify-self-center"
                 >
                     <div className="flex flex-row gap-4">
                         <div className="relative w-[200px] h-[266px]">
@@ -122,8 +123,10 @@ const DashboardVisaoIndividual: React.FC<Props> = ({ filters = {} }) => {
                                 alt={candidato.nm_urna_candidato} 
                                 className="absolute inset-0 w-full h-full object-cover rounded-lg" 
                                 onError={(e) => {
+                                    console.log('Image failed to load:', candidato.img_candidato);
                                     const target = e.target as HTMLImageElement;
                                     target.src = '/placeholder-image.jpg';
+                                    target.onerror = null; // Prevent infinite loop
                                 }}
                             />
                         </div>
@@ -158,6 +161,8 @@ const DashboardVisaoIndividual: React.FC<Props> = ({ filters = {} }) => {
                         </div>
                     </div>
                 </Card>
+
+                {/* Stats component */}
                 {candidato && (
                     <CandidateStats
                         candidateId={candidato.sq_candidato}
@@ -166,36 +171,33 @@ const DashboardVisaoIndividual: React.FC<Props> = ({ filters = {} }) => {
                         cargo={candidato.cd_cargo}
                     />
                 )}
-            
-            <div>
-
-
             </div>
-            
-            </div>
-            <div className="grid grid-cols-2 gap-4 mt-4">
-
 
             <div className="grid grid-cols-2 gap-4 mt-4">
-                {candidato && (
-                    <>
-                        <MunicipiosTable 
-                            candidateId={candidato.sq_candidato} 
-                            year={candidato.ano_eleicao} 
-                        />
-                        <BairrosTable 
-                            candidateId={candidato.sq_candidato} 
-                            year={candidato.ano_eleicao}
-                            municipioId={filters?.selectedMunicipio || undefined}
-                        />
-                    </>
-                )}
-            </div>
+                <div className="grid grid-cols-2">
+                    {candidato && (
+                        <>
+                            <MunicipiosTable 
+                                candidateId={candidato.sq_candidato} 
+                                year={candidato.ano_eleicao} 
+                            />
+                            <BairrosTable 
+                                candidateId={candidato.sq_candidato} 
+                                year={candidato.ano_eleicao}
+                                municipioId={filters?.selectedMunicipio || undefined}
+                            />
+                        </>
+                    )}
+                </div>
+                
+                <div className='bg-black'>
 
-            <div className='bg-black'>
+                <MapComponent 
+                selectedYear={filters.selectedYear}
+                candidateSearch={filters.candidateSearch}
+                />
 
-            </div>
-
+                </div>
             </div>
         </div>
     );

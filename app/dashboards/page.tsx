@@ -2,7 +2,6 @@
 
 export type Filters = {
   selectedYear?: number;
-  selectedView: string;
   selectedCargo?: number | null;
   selectedMunicipio?: number | null;
   candidateSearch?: string;
@@ -22,7 +21,6 @@ const DashboardPage = () => {
 
     const [filters, setFilters] = useState<Filters>({
         selectedYear: 2022, // Set default year
-        selectedView: 'Votos totais',
         selectedCargo: null,
         selectedMunicipio: null, // Initialize selectedMunicipio
         
@@ -31,8 +29,7 @@ const DashboardPage = () => {
     useEffect(() => {
         if (selectedDashboard === "visaoGeralEleicoes") {
             setFilters((prevFilters) => ({
-                ...prevFilters,
-                selectedView: 'Votos totais', // Ensure default view is set
+                ...prevFilters
             }));
         }
     }, [selectedDashboard]);

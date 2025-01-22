@@ -102,3 +102,28 @@
     border-radius: var(--prettier-radius);
   }
 }
+
+@layer components {
+  .mapboxgl-canvas {
+    transition: transform 300ms ease-in-out;
+  }
+  
+  .mapboxgl-marker {
+    transition: all 300ms ease-in-out;
+  }
+  
+  /* Add smooth transitions for cluster elements */
+  .cluster-marker {
+    transition: all 300ms ease-in-out;
+  }
+  
+  /* Optional: Add a subtle pop effect when clusters form/unform */
+  @keyframes clusterPop {
+    0% { transform: scale(0.8); opacity: 0.5; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  
+  .cluster-marker-entering {
+    animation: clusterPop 300ms ease-out forwards;
+  }
+}
