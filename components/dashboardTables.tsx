@@ -65,9 +65,18 @@ export const MunicipiosTable: React.FC<{ candidateId: bigint; year: number }> = 
     React.useEffect(() => {
         const fetchData = async () => {
             try {
-                const response = await fetch(`/api/votes/municipalities?candidateId=${candidateId}&year=${year}`);
+                const response = await fetch(`/api/votes/cities?candidateId=${candidateId}&year=${year}`);
                 const result = await response.json();
-                setData(result.data || []);
+                
+                const formattedData: TableData[] = (result.data || [])
+                    .map((item: any) => ({
+                        name: item.nm_municipio,
+                        votes: item.total_votos,
+                        percentage: item.percentual_votos
+                    }))
+                    .sort((a: TableData, b: TableData) => b.votes - a.votes); // Sort by votes in descending order
+                
+                setData(formattedData);
             } catch (error) {
                 console.error('Error fetching municipality data:', error);
             } finally {

@@ -1,3 +1,4 @@
+// Import necessary dependencies for React, Mapbox GL, and UI components
 import React, { useState, useEffect } from 'react';
 import Map, { Source, Layer, Popup } from 'react-map-gl';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -6,36 +7,46 @@ import type { Feature, Point } from 'geojson';
 import type { CircleLayer, SymbolLayer } from 'react-map-gl';
 import { supabase } from '@/utils/supabase/client';
 
+// Define component props interface
 interface MapComponentProps {
-    selectedYear?: number;
-    candidateSearch?: string;
-    sq_candidato?: bigint;
+    selectedYear?: number;      // Year of election
+    candidateSearch?: string;   // Search term for candidate
+    sq_candidato?: bigint;     // Unique candidate identifier
 }
 
+// Define interface for city voting data structure
 interface CityVoteData {
-    nm_municipio: string;
-    latitude: number;
-    longitude: number;
-    total_votos: number;
-    percentual_votos: number;
+    nm_municipio: string;       // City name
+    latitude: number;          // Geographical latitude
+    longitude: number;         // Geographical longitude
+    total_votos: number;      // Total votes in the city
+    percentual_votos: number; // Percentage of votes in the city
 }
 
+// Define view filter types for different geographical levels
 type ViewFilter = 'cidade' | 'bairro' | 'sessao';
+// Define display filter types for vote visualization
+type DisplayFilter = 'votos' | 'percentual';
 
 const MapComponent: React.FC<MapComponentProps> = ({ 
     selectedYear = 2022, // Provide default value
     candidateSearch = '', // Provide default value
     sq_candidato 
 }) => {
+    // State for map viewport control
     const [viewState, setViewState] = useState({
-        latitude: -8.77,
-        longitude: -67.81,
-        zoom: 7
+        latitude: -8.77,        // Initial center latitude (Acre state)
+        longitude: -67.81,      // Initial center longitude (Acre state)
+        zoom: 7                 // Initial zoom level
     });
 
+    // State management for various component features
     const [activeFilter, setActiveFilter] = useState<ViewFilter>('cidade');
+    const [displayFilter, setDisplayFilter] = useState<DisplayFilter>('votos');
     const [cityData, setCityData] = useState<CityVoteData[]>([]);
     const [error, setError] = useState<string | null>(null);
+    
+    // State for popup information display
     const [popupInfo, setPopupInfo] = useState<{
         longitude: number;
         latitude: number;
@@ -44,17 +55,20 @@ const MapComponent: React.FC<MapComponentProps> = ({
         percentage: number;
     } | null>(null);
 
+    // Reference to track current popup
     const currentPopupRef = React.useRef<any>(null);
 
+    // Handler for changing view filter (cidade/bairro/sessao)
     const handleFilterChange = (filter: ViewFilter) => {
         setActiveFilter(filter);
-        // Adjust zoom level based on filter
+        // Adjust zoom based on selected filter
         setViewState(prev => ({
             ...prev,
             zoom: filter === 'sessao' ? 12 : 7
         }));
     };
 
+    // Effect hook to fetch city voting data
     useEffect(() => {
         const fetchCityData = async () => {
             if (!selectedYear || !sq_candidato || activeFilter !== 'cidade') {
@@ -63,33 +77,15 @@ const MapComponent: React.FC<MapComponentProps> = ({
             }
 
             try {
-                const { data, error } = await supabase.rpc('get_votes_by_city', {
-                    p_ano_eleicao: selectedYear,
-                    p_sq_candidato: sq_candidato
-                });
-
-                if (error) throw error;
+                const response = await fetch(`/api/votes/cities?candidateId=${sq_candidato}&year=${selectedYear}`);
+                const result = await response.json();
                 
-                // Filter out any cities with null coordinates
-                interface CityDataFromDB {
-                    latitude: number | null;
-                    longitude: number | null;
-                    nm_municipio: string;
-                    total_votos: number;
-                    percentual_votos: number;
-                }
-
-                const validData: CityVoteData[] = (data as CityDataFromDB[] || []).filter(
-                    (city: CityDataFromDB): city is CityVoteData => 
-                        city.latitude != null && city.longitude != null
-                );
+                if (!response.ok) throw new Error(result.error);
                 
-                console.log('Valid city data:', validData);
-                setCityData(validData);
+                setCityData(result.data);
                 setError(null);
 
-                // Center map on Acre state if no valid cities
-                if (validData.length === 0) {
+                if (result.data.length === 0) {
                     setViewState({
                         latitude: -8.77,
                         longitude: -67.81,
@@ -112,6 +108,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         console.log('Converted GeoJSON:', cityGeoJson);
     }, [cityData]);
 
+    // Update the cityGeoJson definition to include eleitores
     const cityGeoJson = {
         type: 'FeatureCollection',
         features: cityData.map((item) => ({
@@ -152,14 +149,51 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
     };
 
+    const getDisplayValue = (feature: any) => {
+        if (displayFilter === 'votos') {
+            return feature.properties.cluster ? feature.properties.sum_votes : feature.properties.votes;
+        } else {
+            return feature.properties.cluster ? 
+                Math.round(feature.properties.sum_percentage * 10) / 10 : 
+                Math.round(feature.properties.percentage * 10) / 10;
+        }
+    };
+
+    // Update the unclusteredLabelLayer configuration
+    const unclusteredLabelLayer: SymbolLayer = {
+        id: 'city-unclustered-label',
+        type: 'symbol',
+        source: 'city-points',
+        filter: ['!', ['has', 'point_count']],
+        layout: {
+            'text-field': displayFilter === 'votos' ?
+                ['to-string', ['get', 'votes']] :
+                ['concat', ['to-string', ['get', 'percentage']], '%'],
+            'text-size': 14,
+            'text-anchor': 'center',
+            'text-allow-overlap': true
+        },
+        paint: {
+            'text-color': '#ffffff',
+        }
+    };
+
+    // Update cluster label layer with weighted average percentage calculation
     const clusterLabelLayer: SymbolLayer = {
         id: 'city-cluster-label',
         type: 'symbol',
         source: 'city-points',
         filter: ['has', 'point_count'],
         layout: {
-            'text-field': '{point_count_abbreviated}',
-            'text-size': 12
+            'text-field': displayFilter === 'votos' ?
+                ['get', 'sum_votes'] :
+                ['concat',
+                    ['number-format', ['get', 'sum_percentage'], { 'maximumFractionDigits': 2 }],
+                    '%'
+                ],
+            'text-size': 14,
+            'text-anchor': 'center',
+            'text-allow-overlap': true
         },
         paint: {
             'text-color': '#ffffff'
@@ -188,30 +222,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
     };
 
-    // Updated unclusteredLabelLayer with more visible settings
-    const unclusteredLabelLayer: SymbolLayer = {
-        id: 'city-unclustered-label',
-        type: 'symbol',
-        source: 'city-points',
-        filter: ['!', ['has', 'point_count']],
-        layout: {
-            'text-field': [
-                'concat',
-                ['to-string', ['get', 'votes']],
-                '\n',
-                ['to-string', ['get', 'percentage']],
-                '%'
-            ],
-            'text-size': 14,
-            'text-anchor': 'center',
-            'text-allow-overlap': true  // Allow text to overlap
-        },
-        paint: {
-            'text-color': '#ffffff',
-
-        }
-    };
-
     // Add debug logs for render conditions
     useEffect(() => {
         console.log('Render conditions:', {
@@ -235,13 +245,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
     }, [cityData]);
 
+    // Handler for map click events
     const handleClick = (e: any) => {
         const feature = e.features?.[0] as Feature<Point> | undefined;
         
-        // Always close the current popup before showing a new one
+        // Close current popup and create new one with delay
         setPopupInfo(null);
         
-        // Short delay to ensure the previous popup is fully closed
         setTimeout(() => {
             if (feature?.properties && feature.geometry.type === 'Point') {
                 const newPopupInfo = {
@@ -257,32 +267,51 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }, 10);
     };
 
+    // JSX rendering of the map component
     return (
         <Card className="w-full h-full">
             <CardHeader>
                 <div className="text-xl font-semibold">Mapa</div>
-                <div className="flex gap-2">
-                    <Badge
-                        variant={activeFilter === 'cidade' ? 'default' : 'outline'}
-                        className="cursor-pointer rounded-sm"
-                        onClick={() => handleFilterChange('cidade')}
-                    >
-                        Cidade
-                    </Badge>
-                    <Badge
-                        variant={activeFilter === 'bairro' ? 'default' : 'outline'}
-                        className="cursor-pointer rounded-sm"
-                        onClick={() => handleFilterChange('bairro')}
-                    >
-                        Bairro
-                    </Badge>
-                    <Badge
-                        variant={activeFilter === 'sessao' ? 'default' : 'outline'}
-                        className="cursor-pointer rounded-sm"
-                        onClick={() => handleFilterChange('sessao')}
-                    >
-                        Seção
-                    </Badge>
+                <div className="flex justify-between">
+                    <div className="flex gap-2">
+                        <Badge
+                            variant={activeFilter === 'cidade' ? 'default' : 'outline'}
+                            className="cursor-pointer rounded-sm"
+                            onClick={() => handleFilterChange('cidade')}
+                        >
+                            Cidade
+                        </Badge>
+                        <Badge
+                            variant={activeFilter === 'bairro' ? 'default' : 'outline'}
+                            className="cursor-pointer rounded-sm"
+                            onClick={() => handleFilterChange('bairro')}
+                        >
+                            Bairro
+                        </Badge>
+                        <Badge
+                            variant={activeFilter === 'sessao' ? 'default' : 'outline'}
+                            className="cursor-pointer rounded-sm"
+                            onClick={() => handleFilterChange('sessao')}
+                        >
+                            Seção
+                        </Badge>
+                    </div>
+                    <div className="flex gap-2">
+                        <Badge
+                            variant={displayFilter === 'votos' ? 'default' : 'outline'}
+                            className="cursor-pointer rounded-sm"
+                            onClick={() => setDisplayFilter('votos')}
+                        >
+                            Votos
+                        </Badge>
+                        <Badge
+                            variant={displayFilter === 'percentual' ? 'default' : 'outline'}
+                            className="cursor-pointer rounded-sm"
+                            onClick={() => setDisplayFilter('percentual')}
+                        >
+                            Percentual
+                        </Badge>
+                    </div>
                 </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -305,17 +334,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
                                 clusterMaxZoom={14}
                                 clusterRadius={50}
                                 clusterProperties={{
-                                    sum_votes: ["+", ["get", "votes"]]
+                                    sum_votes: ["+", ["get", "votes"]],
+                                    sum_percentage: ["+", ["get", "percentage"]]  // Sum up the city percentages
                                 }}
                             >
                                 <Layer {...clusterCircleLayer} />
-                                <Layer
-                                    {...clusterLabelLayer}
-                                    layout={{
-                                        ...clusterLabelLayer.layout,
-                                        'text-field': '{sum_votes}' // Show sum of votes instead of point count
-                                    }}
-                                />
+                                <Layer {...clusterLabelLayer} />
                                 <Layer {...unclusteredCircleLayer} />
                                 <Layer {...unclusteredLabelLayer} />
                             </Source>
@@ -333,10 +357,27 @@ const MapComponent: React.FC<MapComponentProps> = ({
                                 }}
                             >
                                 <div className="p-2">
-                                    <h3 className="font-bold">{popupInfo.city}</h3>
-                                    <p>Votos: {popupInfo.votes}</p>
-                                    {popupInfo.percentage > 0 && (
-                                        <p>Percentual: {popupInfo.percentage}%</p>
+                                    {popupInfo.votes && typeof popupInfo.votes === 'number' ? (
+                                        <>
+                                            <h3 className="font-bold">{popupInfo.city}</h3>
+                                            <p>Votos: {popupInfo.votes}</p>
+                                            {popupInfo.percentage > 0 && (
+                                                <p>Percentual: {popupInfo.percentage}%</p>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div>
+                                            <h3 className="font-bold">Cidades no grupo:</h3>
+                                            <p className="max-h-[200px] overflow-y-auto">
+                                                {cityData
+                                                    .filter(city => 
+                                                        Math.abs(city.longitude - popupInfo.longitude) < 0.1 &&
+                                                        Math.abs(city.latitude - popupInfo.latitude) < 0.1
+                                                    )
+                                                    .map(city => city.nm_municipio)
+                                                    .join(', ')}
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
                             </Popup>

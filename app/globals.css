@@ -126,4 +126,20 @@
   .cluster-marker-entering {
     animation: clusterPop 300ms ease-out forwards;
   }
+
+  .custom-cluster-icon {
+  background: #3388ff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+}
+
+.custom-cluster-icon span {
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+}
 }

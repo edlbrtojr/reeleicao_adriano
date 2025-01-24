@@ -12,20 +12,18 @@ export async function GET(request: Request) {
 
     try {
         const supabase = await createClient();
-        const { data, error } = await supabase.rpc('get_candidate_votes_by_municipality', {
-            p_sq_candidato: candidateId,
-            p_ano_eleicao: parseInt(year)
+        const { data, error } = await supabase.rpc('get_votes_by_city', {
+            p_ano_eleicao: parseInt(year),
+            p_sq_candidato: candidateId
         });
 
         if (error) throw error;
 
-        const formattedData = data.map((item: any) => ({
-            name: item.nm_municipio,
-            votes: Number(item.total_votos),
-            percentage: Number(item.percentual_votos)
-        }));
+        const validData = (data || []).filter(
+            (city: any) => city.latitude != null && city.longitude != null
+        );
 
-        return NextResponse.json({ data: formattedData });
+        return NextResponse.json({ data: validData });
     } catch (error) {
         console.error('Error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
