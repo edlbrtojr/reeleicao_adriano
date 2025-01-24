@@ -193,8 +193,9 @@ const DashboardVisaoIndividual: React.FC<Props> = ({ filters = {} }) => {
                 <div className='bg-black'>
 
                 <MapComponent 
-                selectedYear={filters.selectedYear}
-                candidateSearch={filters.candidateSearch}
+                selectedYear={filters.selectedYear || 2022}
+                candidateSearch={filters.candidateSearch || ''}
+                sq_candidato={candidato?.sq_candidato}  // Make sure this is being passed
                 />
 
                 </div>

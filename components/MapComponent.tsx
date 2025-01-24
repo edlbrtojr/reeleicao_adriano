@@ -1,209 +1,164 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Map, { Source, Layer, Popup } from 'react-map-gl';
-import type { CircleLayer, SymbolLayer, HeatmapLayer } from 'react-map-gl';
-import type { Feature, Point } from 'geojson';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import type { Feature, Point } from 'geojson';
+import type { CircleLayer, SymbolLayer } from 'react-map-gl';
 import { supabase } from '@/utils/supabase/client';
-import type mapboxgl from 'mapbox-gl';
 
-interface Props {
+interface MapComponentProps {
     selectedYear?: number;
     candidateSearch?: string;
+    sq_candidato?: bigint;
 }
 
-interface VotingLocation {
-    city: string;
-    bairro?: string;
+interface CityVoteData {
+    nm_municipio: string;
     latitude: number;
     longitude: number;
-    votes: number;
-    percentage?: number;
-    section?: number;  // Add this line
-    nr_secao?: number;
-    nm_local_votacao?: string;
+    total_votos: number;
+    percentual_votos: number;
 }
 
-interface LocationFeature extends Feature {
-    properties: {
-        cluster: boolean;
-        cluster_id?: number;
-        point_count?: number;
-        votes: number;
-        city: string;
-        nr_secao?: number;
-        nm_local_votacao?: string;
-    };
-    geometry: Point;
-}
+type ViewFilter = 'cidade' | 'bairro' | 'sessao';
 
-const MapComponent: React.FC<Props> = ({ selectedYear, candidateSearch }) => {
-    const [locations, setLocations] = useState<VotingLocation[]>([]);
-    const [popupInfo, setPopupInfo] = useState<{
-        longitude: number;
-        latitude: number;
-        name: string;
-        votes: number;
-    } | null>(null);
-    
+const MapComponent: React.FC<MapComponentProps> = ({ 
+    selectedYear = 2022, // Provide default value
+    candidateSearch = '', // Provide default value
+    sq_candidato 
+}) => {
     const [viewState, setViewState] = useState({
         latitude: -8.77,
         longitude: -67.81,
         zoom: 7
     });
 
-    const [activeGroupFilter, setActiveGroupFilter] = useState<'cidade' | 'bairro' | 'sessao'>('cidade');
-    const [activeViewFilter, setActiveViewFilter] = useState<'total' | 'percentage' | 'heatmap' | 'ranking'>('total');
+    const [activeFilter, setActiveFilter] = useState<ViewFilter>('cidade');
+    const [cityData, setCityData] = useState<CityVoteData[]>([]);
+    const [error, setError] = useState<string | null>(null);
+    const [popupInfo, setPopupInfo] = useState<{
+        longitude: number;
+        latitude: number;
+        city: string;
+        votes: number;
+        percentage: number;
+    } | null>(null);
+
+    const currentPopupRef = React.useRef<any>(null);
+
+    const handleFilterChange = (filter: ViewFilter) => {
+        setActiveFilter(filter);
+        // Adjust zoom level based on filter
+        setViewState(prev => ({
+            ...prev,
+            zoom: filter === 'sessao' ? 12 : 7
+        }));
+    };
 
     useEffect(() => {
-        const fetchVotingData = async () => {
-            if (!selectedYear || !candidateSearch) {
-                console.log('Missing required parameters:', { selectedYear, candidateSearch });
+        const fetchCityData = async () => {
+            if (!selectedYear || !sq_candidato || activeFilter !== 'cidade') {
+                setCityData([]);
                 return;
             }
 
-            const rpcMethod = activeGroupFilter === 'cidade' 
-                ? 'get_votes_by_city' 
-                : activeGroupFilter === 'bairro' 
-                    ? 'get_votes_by_neighborhood'
-                    : 'get_votes_by_section';
-
             try {
-                const { data, error } = await supabase
-                    .rpc(rpcMethod, {
-                        p_ano_eleicao: selectedYear,
-                        p_nm_candidato: candidateSearch
-                    });
+                const { data, error } = await supabase.rpc('get_votes_by_city', {
+                    p_ano_eleicao: selectedYear,
+                    p_sq_candidato: sq_candidato
+                });
 
                 if (error) throw error;
-
-                const processedLocations = data
-                    .filter((loc: any) => loc.latitude && loc.longitude) // Only include locations with coordinates
-                    .map((loc: any) => ({
-                        city: loc.nm_municipio,
-                        bairro: loc.nm_bairro,
-                        latitude: Number(loc.latitude),
-                        longitude: Number(loc.longitude),
-                        votes: Number(loc.total_votos),
-                        percentage: Number(loc.percentual_votos),
-                        nr_secao: loc.nr_secao,
-                        nm_local_votacao: loc.nm_local_votacao
-                    }));
-
-                if (processedLocations.length > 0) {
-                    // Center map and zoom based on filter type
-                    setViewState({
-                        latitude: processedLocations[0].latitude,
-                        longitude: processedLocations[0].longitude,
-                        zoom: activeGroupFilter === 'sessao' ? 12 : 7
-                    });
+                
+                // Filter out any cities with null coordinates
+                interface CityDataFromDB {
+                    latitude: number | null;
+                    longitude: number | null;
+                    nm_municipio: string;
+                    total_votos: number;
+                    percentual_votos: number;
                 }
 
-                setLocations(processedLocations);
-            } catch (err) {
-                console.error('Error fetching voting data:', err);
+                const validData: CityVoteData[] = (data as CityDataFromDB[] || []).filter(
+                    (city: CityDataFromDB): city is CityVoteData => 
+                        city.latitude != null && city.longitude != null
+                );
+                
+                console.log('Valid city data:', validData);
+                setCityData(validData);
+                setError(null);
+
+                // Center map on Acre state if no valid cities
+                if (validData.length === 0) {
+                    setViewState({
+                        latitude: -8.77,
+                        longitude: -67.81,
+                        zoom: 7
+                    });
+                }
+            } catch (err: any) {
+                console.error('Error fetching city data:', err);
+                setError('Failed to load city data');
+                setCityData([]);
             }
         };
 
-        fetchVotingData();
-    }, [selectedYear, candidateSearch, activeGroupFilter]);
+        fetchCityData();
+    }, [selectedYear, sq_candidato, activeFilter]);
 
-    const geojsonData = {
+    // Debug log for GeoJSON conversion
+    useEffect(() => {
+        console.log('Current cityData:', cityData);
+        console.log('Converted GeoJSON:', cityGeoJson);
+    }, [cityData]);
+
+    const cityGeoJson = {
         type: 'FeatureCollection',
-        features: locations.map(loc => ({
+        features: cityData.map((item) => ({
             type: 'Feature',
             properties: {
-                cluster: false,
-                votes: loc.votes,
-                city: loc.city,
-                nr_secao: loc.nr_secao,
-                nm_local_votacao: loc.nm_local_votacao
+                votes: item.total_votos,
+                percentage: item.percentual_votos,
+                city: item.nm_municipio
             },
             geometry: {
                 type: 'Point',
-                coordinates: [loc.longitude, loc.latitude]
+                coordinates: [item.longitude, item.latitude]
             }
         }))
     };
 
-    const getCircleColor = () => {
-        if (activeViewFilter === 'ranking') {
-            return [
-                'step',
-                ['get', 'votes'],
-                '#FED976', // lowest
-                 100,
-                '#FEB24C',
-                500,
-                '#FD8D3C',
-                1000,
-                '#FC4E2A',
-                5000,
-                '#E31A1C' // highest
-            ] as mapboxgl.Expression;
-        }
-        return '#3498db';
-    };
-
-    const getCircleRadius = () => {
-        if (activeViewFilter === 'percentage') {
-            return ['*', ['get', 'percentage'], 50] as mapboxgl.Expression;
-        }
-        return [
-            'step',
-            ['get', 'point_count'],
-            20,
-            10,
-            30,
-            50,
-            40
-        ] as mapboxgl.Expression;
-    };
-
-    const clusterLayer: CircleLayer = {
-        id: 'clusters',
+    // Layers for clusters (blue circles) and label with vote count
+    const clusterCircleLayer: CircleLayer = {
+        id: 'city-cluster-circle',
         type: 'circle',
-        source: 'voting-points',
+        source: 'city-points',
         filter: ['has', 'point_count'],
         paint: {
-            'circle-color': getCircleColor(),
-            'circle-opacity': 0.9,
-            'circle-radius': getCircleRadius()
-        }
-    };
-
-    const heatmapLayer: HeatmapLayer = {
-        id: 'heatmap',
-        type: 'heatmap',
-        source: 'voting-points',
-        maxzoom: 15,
-        paint: {
-            'heatmap-weight': ['interpolate', ['linear'], ['get', 'votes'], 0, 0, 1000, 1],
-            'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 1, 9, 3],
-            'heatmap-color': [
+            'circle-color': '#3498db',
+            'circle-radius': [
                 'interpolate',
                 ['linear'],
-                ['heatmap-density'],
-                0, 'rgba(33,102,172,0)',
-                0.2, 'rgb(103,169,207)',
-                0.4, 'rgb(209,229,240)',
-                0.6, 'rgb(253,219,199)',
-                0.8, 'rgb(239,138,98)',
-                1, 'rgb(178,24,43)'
+                ['get', 'point_count'],
+                2, 30,    // min points, min size
+                5, 35,
+                10, 40,
+                20, 45,
+                50, 50    // max points, max size
             ],
-            'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 2, 9, 20],
-            'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 7, 1, 9, 0]
+            'circle-opacity': 0.8,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff'
         }
     };
 
-    const clusterCountLayer: SymbolLayer = {
-        id: 'cluster-count',
+    const clusterLabelLayer: SymbolLayer = {
+        id: 'city-cluster-label',
         type: 'symbol',
-        source: 'voting-points',
+        source: 'city-points',
         filter: ['has', 'point_count'],
         layout: {
-            'text-field': '{sum_votes}',
-            'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+            'text-field': '{point_count_abbreviated}',
             'text-size': 12
         },
         paint: {
@@ -211,145 +166,123 @@ const MapComponent: React.FC<Props> = ({ selectedYear, candidateSearch }) => {
         }
     };
 
-    const unclusteredPointLayer: CircleLayer = {
-        id: 'unclustered-point',
+    // Updated unclusteredCircleLayer with more visible settings
+    const unclusteredCircleLayer: CircleLayer = {
+        id: 'city-unclustered-point',
         type: 'circle',
-        source: 'voting-points',
+        source: 'city-points',
         filter: ['!', ['has', 'point_count']],
         paint: {
             'circle-color': '#3498db',
-            'circle-opacity': 0.9,
-            'circle-radius': 10
-        }
-    };
-
-    const sectionLayer: CircleLayer = {
-        id: 'section-points-layer',
-        type: 'circle',
-        source: 'voting-points',
-        paint: {
-            'circle-color': '#FF4136',
-            'circle-opacity': 0.9,
             'circle-radius': [
                 'interpolate',
                 ['linear'],
                 ['get', 'votes'],
-                0, 5,
-                1000, 20
-            ]
+                0, 20,     // smaller starting size
+                500, 25,  // medium size
+                1000, 30  // max size for individual points
+            ],
+            'circle-opacity': 0.8,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff'
         }
     };
 
-    const sectionLabelLayer: SymbolLayer = {
-        id: 'section-labels-layer',
+    // Updated unclusteredLabelLayer with more visible settings
+    const unclusteredLabelLayer: SymbolLayer = {
+        id: 'city-unclustered-label',
         type: 'symbol',
-        source: 'voting-points',
+        source: 'city-points',
+        filter: ['!', ['has', 'point_count']],
         layout: {
-            'text-field': ['concat', ['get', 'nr_secao'], ' - ', ['get', 'votes'], ' votos'],
-            'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
-            'text-size': 12,
-            'text-offset': [0, -1.5],
-            'text-allow-overlap': false
+            'text-field': [
+                'concat',
+                ['to-string', ['get', 'votes']],
+                '\n',
+                ['to-string', ['get', 'percentage']],
+                '%'
+            ],
+            'text-size': 14,
+            'text-anchor': 'center',
+            'text-allow-overlap': true  // Allow text to overlap
         },
         paint: {
             'text-color': '#ffffff',
-            'text-halo-color': '#000000',
-            'text-halo-width': 1
+
         }
     };
 
-    const handleClick = (event: any) => {
-        const feature = event.features?.[0] as LocationFeature | undefined;
-        if (feature && feature.geometry.type === 'Point') {
-            const [longitude, latitude] = feature.geometry.coordinates;
-            
-            if (feature.properties.cluster) {
-                setPopupInfo({
-                    longitude,
-                    latitude,
-                    name: `Grupo de ${feature.properties.point_count} locais`,
-                    votes: feature.properties.votes
-                });
-            } else {
-                const name = activeGroupFilter === 'sessao' 
-                    ? `Seção ${feature.properties.nr_secao} - ${feature.properties.nm_local_votacao}`
-                    : feature.properties.city;
-                    
-                setPopupInfo({
-                    longitude,
-                    latitude,
-                    name,
-                    votes: feature.properties.votes
-                });
-            }
-        }
-    };
+    // Add debug logs for render conditions
+    useEffect(() => {
+        console.log('Render conditions:', {
+            activeFilter,
+            hasError: !!error,
+            dataLength: cityData.length,
+            geoJsonFeatures: cityGeoJson.features.length
+        });
+    }, [cityData, error, activeFilter]);
 
-    const getVisibleLayers = () => {
-        if (activeViewFilter === 'heatmap') {
-            return [heatmapLayer];
+    // Update the map center based on data
+    useEffect(() => {
+        if (cityData.length > 0) {
+            // Center map on first city
+            setViewState(prev => ({
+                ...prev,
+                latitude: cityData[0].latitude,
+                longitude: cityData[0].longitude,
+                zoom: 7
+            }));
         }
+    }, [cityData]);
+
+    const handleClick = (e: any) => {
+        const feature = e.features?.[0] as Feature<Point> | undefined;
         
-        if (activeGroupFilter === 'sessao') {
-            return [
-                {
-                    ...sectionLayer,
-                    id: 'section-points-layer'
-                },
-                {
-                    ...sectionLabelLayer,
-                    id: 'section-labels-layer'
-                }
-            ];
-        }
+        // Always close the current popup before showing a new one
+        setPopupInfo(null);
         
-        return [
-            {
-                ...clusterLayer,
-                id: 'cluster-points-layer'
-            },
-            {
-                ...clusterCountLayer,
-                id: 'cluster-count-layer'
-            },
-            {
-                ...unclusteredPointLayer,
-                id: 'unclustered-points-layer'
+        // Short delay to ensure the previous popup is fully closed
+        setTimeout(() => {
+            if (feature?.properties && feature.geometry.type === 'Point') {
+                const newPopupInfo = {
+                    longitude: feature.geometry.coordinates[0],
+                    latitude: feature.geometry.coordinates[1],
+                    city: feature.properties.city,
+                    votes: feature.properties.cluster ? feature.properties.point_count : feature.properties.votes,
+                    percentage: feature.properties.percentage || 0
+                };
+                setPopupInfo(newPopupInfo);
+                currentPopupRef.current = newPopupInfo;
             }
-        ];
+        }, 10);
     };
 
     return (
         <Card className="w-full h-full">
             <CardHeader>
-                <div className="text-xl font-semibold">Mapa de Votos</div>
-                <div className="flex flex-col space-y-2">
-                    <div id='filterMapGrouping' className="flex flex-wrap gap-2">
-                        <Badge
-                            variant={activeGroupFilter === 'cidade' ? 'default' : 'outline'}
-                            className="cursor-pointer rounded-sm"
-                            onClick={() => setActiveGroupFilter('cidade')}
-                        >
-                            Cidade
-                        </Badge>
-                        
-                        <Badge
-                            variant={activeGroupFilter === 'bairro' ? 'default' : 'outline'}
-                            className="cursor-pointer rounded-sm"
-                            onClick={() => setActiveGroupFilter('bairro')}
-                        >
-                            Bairro
-                        </Badge>
-
-                        <Badge
-                            variant={activeGroupFilter === 'sessao' ? 'default' : 'outline'}
-                            className="cursor-pointer rounded-sm"
-                            onClick={() => setActiveGroupFilter('sessao')}
-                        >
-                            Sessão
-                        </Badge>
-                    </div>
-                    {/* ...existing badges... */}
+                <div className="text-xl font-semibold">Mapa</div>
+                <div className="flex gap-2">
+                    <Badge
+                        variant={activeFilter === 'cidade' ? 'default' : 'outline'}
+                        className="cursor-pointer rounded-sm"
+                        onClick={() => handleFilterChange('cidade')}
+                    >
+                        Cidade
+                    </Badge>
+                    <Badge
+                        variant={activeFilter === 'bairro' ? 'default' : 'outline'}
+                        className="cursor-pointer rounded-sm"
+                        onClick={() => handleFilterChange('bairro')}
+                    >
+                        Bairro
+                    </Badge>
+                    <Badge
+                        variant={activeFilter === 'sessao' ? 'default' : 'outline'}
+                        className="cursor-pointer rounded-sm"
+                        onClick={() => handleFilterChange('sessao')}
+                    >
+                        Seção
+                    </Badge>
                 </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -360,46 +293,56 @@ const MapComponent: React.FC<Props> = ({ selectedYear, candidateSearch }) => {
                         style={{ width: '100%', height: '100%' }}
                         mapStyle="mapbox://styles/mapbox/dark-v11"
                         mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN}
-                        interactiveLayerIds={['section-points-layer', 'cluster-points-layer', 'unclustered-points-layer']}
+                        interactiveLayerIds={['city-cluster-circle', 'city-unclustered-point']}
                         onClick={handleClick}
                     >
-                        <Source
-                            id="voting-points"
-                            type="geojson"
-                            data={geojsonData}
-                            cluster={activeGroupFilter !== 'sessao'}
-                            clusterMaxZoom={14}
-                            clusterRadius={50}
-                            clusterProperties={{
-                                sum_votes: ['+', ['get', 'votes']]
-                            }}
-                        >
-                            {activeGroupFilter === 'sessao' ? (
-                                <>
-                                    <Layer {...sectionLayer} />
-                                    <Layer {...sectionLabelLayer} />
-                                </>
-                            ) : (
-                                getVisibleLayers().map((layer) => (
-                                    <Layer key={layer.id} {...layer} />
-                                ))
-                            )}
-                        </Source>
-
+                        {activeFilter === 'cidade' && cityData.length > 0 && (
+                            <Source
+                                id="city-points"
+                                type="geojson"
+                                data={cityGeoJson}
+                                cluster={true}
+                                clusterMaxZoom={14}
+                                clusterRadius={50}
+                                clusterProperties={{
+                                    sum_votes: ["+", ["get", "votes"]]
+                                }}
+                            >
+                                <Layer {...clusterCircleLayer} />
+                                <Layer
+                                    {...clusterLabelLayer}
+                                    layout={{
+                                        ...clusterLabelLayer.layout,
+                                        'text-field': '{sum_votes}' // Show sum of votes instead of point count
+                                    }}
+                                />
+                                <Layer {...unclusteredCircleLayer} />
+                                <Layer {...unclusteredLabelLayer} />
+                            </Source>
+                        )}
                         {popupInfo && (
-                            <Popup
+                            <Popup className='text-black'
                                 longitude={popupInfo.longitude}
                                 latitude={popupInfo.latitude}
                                 anchor="bottom"
-                                onClose={() => setPopupInfo(null)}
+                                closeButton={true}
+                                closeOnClick={false}
+                                onClose={() => {
+                                    setPopupInfo(null);
+                                    currentPopupRef.current = null;
+                                }}
                             >
-                                <div>
-                                    <h3>{popupInfo.name}</h3>
-                                    <p>Total de votos: {popupInfo.votes}</p>
+                                <div className="p-2">
+                                    <h3 className="font-bold">{popupInfo.city}</h3>
+                                    <p>Votos: {popupInfo.votes}</p>
+                                    {popupInfo.percentage > 0 && (
+                                        <p>Percentual: {popupInfo.percentage}%</p>
+                                    )}
                                 </div>
                             </Popup>
                         )}
                     </Map>
+                    {error && <div className="text-red-500 absolute bottom-4 left-4 bg-white p-2 rounded">{error}</div>}
                 </div>
             </CardContent>
         </Card>
