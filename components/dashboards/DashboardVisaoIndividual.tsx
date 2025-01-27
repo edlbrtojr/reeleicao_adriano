@@ -7,7 +7,8 @@ import { formatNumber } from '@/utils/formatNumber';
 import { Badge } from '../ui/badge';
 import CandidateStats from '@/components/CandidateStats'; // Import CandidateStats component
 import { MunicipiosTable, BairrosTable } from '../dashboardTables'; // Add import for tables
-import MapComponent from '../MapComponent';
+import MapComponent from '@/components/MapComponent'; // Import MapComponent
+import { Skeleton } from '@/components/ui/skeleton'; // Import Skeleton component
 
 // Update Props interface with default values
 interface Props {
@@ -93,7 +94,18 @@ const DashboardVisaoIndividual: React.FC<Props> = ({ filters = {} }) => {
     }, [filters]);
 
     if (loading) {
-        return <p>Carregando dados do candidato...</p>;
+        return (
+            <div className='mt-4 w-full'>
+                <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-4'>
+                    <Skeleton className="w-full h-[266px] rounded-lg" />
+                    <Skeleton className="w-full h-[266px] rounded-lg" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                    <Skeleton className="w-full h-[400px] rounded-lg" />
+                    <Skeleton className="w-full h-[400px] rounded-lg" />
+                </div>
+            </div>
+        );
     }
 
     if (error) {
@@ -110,14 +122,14 @@ const DashboardVisaoIndividual: React.FC<Props> = ({ filters = {} }) => {
 
     return (
         <div className='mt-4 w-full'>
-            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4'>
+            <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-4'>
                 {/* First card */}
                 <Card 
                     key={candidato.nr_candidato.toString()} 
-                    className="bg-white dark:bg-gray-800 shadow rounded-lg min-w-[700px] p-2 justify-items-center justify-self-center"
+                    className="bg-white dark:bg-gray-800 shadow rounded-lg min-w-[95%] p-2 justify-items-center justify-self-center"
                 >
-                    <div className="flex flex-row gap-4">
-                        <div className="relative w-[200px] h-[266px]">
+                    <div className="flex flex-col sm:flex-row gap-8">
+                        <div className="relative w-full sm:w-[200px] h-[266px]">
                             <img 
                                 src={candidato.img_candidato} 
                                 alt={candidato.nm_urna_candidato} 
@@ -173,8 +185,8 @@ const DashboardVisaoIndividual: React.FC<Props> = ({ filters = {} }) => {
                 )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mt-4">
-                <div className="grid grid-cols-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {candidato && (
                         <>
                             <MunicipiosTable 
@@ -191,13 +203,11 @@ const DashboardVisaoIndividual: React.FC<Props> = ({ filters = {} }) => {
                 </div>
                 
                 <div className='bg-black'>
-
-                <MapComponent 
-                selectedYear={filters.selectedYear || 2022}
-                candidateSearch={filters.candidateSearch || ''}
-                sq_candidato={candidato?.sq_candidato}  // Make sure this is being passed
-                />
-
+                    <MapComponent 
+                        selectedYear={filters.selectedYear || 2022}
+                        candidateSearch={filters.candidateSearch || ''}
+                        sq_candidato={candidato?.sq_candidato}  // Make sure this is being passed
+                    />
                 </div>
             </div>
         </div>

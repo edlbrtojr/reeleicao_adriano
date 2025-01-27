@@ -43,6 +43,8 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
     const [filteredCandidates, setFilteredCandidates] = useState<Candidate[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [open, setOpen] = useState(false);
+    const [selectedIndex, setSelectedIndex] = useState<number>(-1);
+    const [candidateSelected, setCandidateSelected] = useState<boolean>(false);
 
     const municipios = [
         { cd_municipio: 1120, name: 'ACRELÂNDIA' },
@@ -142,7 +144,7 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
             console.error('Error searching candidates:', error);
             setIsSearching(false);
         }
-    }, 300);
+    }, 500); // Wait at least half a second
 
     // Update the search effect
     useEffect(() => {
@@ -157,7 +159,20 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
         return () => {
             debouncedSearch.cancel();
         };
-    }, [candidateSearch, candidates]);
+    }, [candidateSearch]);
+
+    useEffect(() => {
+        // Clear all filters except year when selectedDashboard changes
+        setSelectedCargo(null);
+        setSelectedMunicipio(null);
+        setCandidateSearch('');
+        onChange({ 
+            selectedYear, 
+            selectedCargo: null, 
+            selectedMunicipio: null, 
+            candidateSearch: '' 
+        });
+    }, [selectedDashboard]);
 
     const handleYearChange = (year: number) => {
         setSelectedYear(year);
@@ -240,81 +255,70 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
         }
     };
 
-    // Update the CandidateSearchInput component
-    const CandidateSearchInput = () => (
-        <div className='flex flex-col space-y-4'>
-            <h3>Buscar Candidato</h3>
-            <Popover open={open} onOpenChange={setOpen}>
-                <PopoverTrigger asChild>
-                    <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={open}
-                        className="w-[280px] justify-between"
-                    >
-                        {candidateSearch || "Buscar candidato..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[280px] p-0">
-                    <Command>
-                        <CommandInput
-                            placeholder="Digite o nome do candidato..."
-                            value={candidateSearch}
-                            onValueChange={(search) => {
-                                setCandidateSearch(search);
-                                setOpen(true);
-                            }}
-                        />
-                        <CommandList>
-                            {isSearching ? (
-                                <CommandItem disabled>Buscando candidatos...</CommandItem>
-                            ) : filteredCandidates.length === 0 ? (
-                                <CommandEmpty>Nenhum candidato encontrado.</CommandEmpty>
-                            ) : (
-                                <CommandGroup heading="Candidatos">
-                                    {filteredCandidates.map((candidate) => (
-                                        <CommandItem
-                                            key={candidate.sq_candidato}
-                                            value={candidate.nm_urna_candidato}
-                                            onSelect={() => {
-                                                setCandidateSearch(candidate.nm_urna_candidato);
-                                                setOpen(false);
-                                                onChange({
-                                                    selectedYear,
-                                                    selectedCargo,
-                                                    selectedMunicipio,
-                                                    candidateSearch: candidate.nm_urna_candidato
-                                                });
-                                            }}
-                                        >
-                                            <Check
-                                                className={cn(
-                                                    "mr-2 h-4 w-4",
-                                                    candidateSearch === candidate.nm_urna_candidato ? "opacity-100" : "opacity-0"
-                                                )}
-                                            />
-                                            <div className="flex flex-col">
-                                                <span>{candidate.nm_urna_candidato}</span>
-                                                <span className="text-sm text-muted-foreground">
-                                                    {candidate.nr_candidato} - {candidate.sg_partido}
-                                                </span>
-                                            </div>
-                                        </CommandItem>
-                                    ))}
-                                </CommandGroup>
-                            )}
-                        </CommandList>
-                    </Command>
-                </PopoverContent>
-            </Popover>
-        </div>
-    );
+    const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setCandidateSearch(event.target.value);
+        setSelectedIndex(-1);
+        setCandidateSelected(false);
+    };
+
+    const handleCandidateSelect = (candidate: Candidate) => {
+        setCandidateSearch(candidate.nm_urna_candidato);
+        setFilteredCandidates([]);
+        setIsSearching(false);
+        setCandidateSelected(true);
+        onChange({
+            selectedYear,
+            selectedCargo,
+            selectedMunicipio,
+            candidateSearch: candidate.nm_urna_candidato
+        });
+    };
+
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'ArrowDown') {
+            setSelectedIndex((prevIndex) => (prevIndex + 1) % filteredCandidates.length);
+        } else if (event.key === 'ArrowUp') {
+            setSelectedIndex((prevIndex) => (prevIndex - 1 + filteredCandidates.length) % filteredCandidates.length);
+        } else if (event.key === 'Enter' && selectedIndex >= 0) {
+            handleCandidateSelect(filteredCandidates[selectedIndex]);
+            setFilteredCandidates([]);
+        }
+    };
 
     return (
         <div className='w-full flex flex-col space-y-4'>
-            <div className='flex flex-row space-x-4 justify-between w-full align-baseline'> {/* Change space-y-4 to space-x-4 */}
-                {selectedDashboard === "visaoGeralIndividual" && <CandidateSearchInput />} {/* Add this line */}
+            <div className='flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 justify-between w-full align-baseline'>
+                {selectedDashboard === "visaoGeralIndividual" && (
+                    <div className='flex flex-col space-y-4'>
+                        <h3>Buscar Candidato</h3>
+                        <input
+                            type="text"
+                            value={candidateSearch}
+                            onChange={handleSearchChange}
+                            onKeyDown={handleKeyDown}
+                            placeholder="Digite o nome do candidato..."
+                            className="w-full sm:w-[280px] p-2 border rounded"
+                        />
+                        {isSearching && <p>Buscando candidatos...</p>}
+                        {!isSearching && filteredCandidates.length === 0 && candidateSearch && candidateSearch !== '' && !candidateSelected && (
+                            <p>Nenhum candidato encontrado.</p>
+                        )}
+                        <ul>
+                            {filteredCandidates.map((candidate, index) => (
+                                <li
+                                    key={candidate.sq_candidato}
+                                    onClick={() => {
+                                        handleCandidateSelect(candidate);
+                                        setFilteredCandidates([]);
+                                    }}
+                                    className={`cursor-pointer hover:bg-gray-200 p-2 rounded ${selectedIndex === index ? 'bg-gray-300' : ''}`}
+                                >
+                                    {candidate.nm_urna_candidato} ({candidate.nr_candidato} - {candidate.sg_partido})
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
                 
                 <div className='flex flex-col space-y-4'>
                     <h3>Filtrar por Ano</h3>
@@ -340,9 +344,9 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
 
                 <div className='flex flex-col space-y-4'>
                     <h3>Filtrar por Município</h3>
-                    <div className="flex items-center">
+                    <div className="flex items-center custom-scrollbar">
                         <Select value={selectedMunicipio?.toString() || ''} onValueChange={(value) => handleMunicipioChange(municipios.find(m => m.cd_municipio.toString() === value)?.name || '')}>
-                            <SelectTrigger className="w-[280px]">
+                            <SelectTrigger className="w-full sm:w-[280px]">
                                 <SelectValue placeholder="Selecione um Município" />
                             </SelectTrigger>
                             <SelectContent>
@@ -362,7 +366,7 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
                     <h3>Filtrar por Cargo</h3>
                     <div className="flex items-center">
                         <Select value={selectedCargo?.toString() || ''} onValueChange={(value) => handleCargoChange(cargos.find(c => c.cd_cargo.toString() === value)?.ds_cargo || '')}>
-                            <SelectTrigger className="w-[280px]">
+                            <SelectTrigger className="w-full sm:w-[280px]">
                                 <SelectValue placeholder="Selecione um Cargo" />
                             </SelectTrigger>
                             <SelectContent>
@@ -409,5 +413,46 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({ onChange, selectedD
         </div>
     );
 };
+
+// Add custom scrollbar styles
+const styles = `
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #888;
+    border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #555;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background-color: #f1f1f1;
+    border-radius: 4px;
+}
+
+@media (prefers-color-scheme: dark) {
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background-color: #555;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background-color: #888;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background-color: #333;
+    }
+}
+`;
+
+const styleSheet = document.createElement("style");
+styleSheet.type = "text/css";
+styleSheet.innerText = styles;
+document.head.appendChild(styleSheet);
 
 export default DashboardFilters;

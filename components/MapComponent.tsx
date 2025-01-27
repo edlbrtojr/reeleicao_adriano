@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import type { Feature, Point } from 'geojson';
 import type { CircleLayer, SymbolLayer } from 'react-map-gl';
 import { supabase } from '@/utils/supabase/client';
+import { useTheme } from 'next-themes';
 
 // Define component props interface
 interface MapComponentProps {
@@ -21,6 +22,18 @@ interface CityVoteData {
     longitude: number;         // Geographical longitude
     total_votos: number;      // Total votes in the city
     percentual_votos: number; // Percentage of votes in the city
+}
+
+// Add new interface for voting section data
+interface VotingSecaoData {
+    nr_secao: number;          // Section number
+    nr_local_votacao: number;  // Voting location number
+    nm_local_votacao: string;  // Voting location name
+    latitude: number;
+    longitude: number;
+    total_votos: number;
+    percentual_votos: number;
+    total_count: number;      // Add this line
 }
 
 // Define view filter types for different geographical levels
@@ -44,7 +57,11 @@ const MapComponent: React.FC<MapComponentProps> = ({
     const [activeFilter, setActiveFilter] = useState<ViewFilter>('cidade');
     const [displayFilter, setDisplayFilter] = useState<DisplayFilter>('votos');
     const [cityData, setCityData] = useState<CityVoteData[]>([]);
+    const [secaoData, setSecaoData] = useState<VotingSecaoData[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [secaoOffset, setSecaoOffset] = useState(0);
+    const [secaoTotal, setSecaoTotal] = useState(0);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
     
     // State for popup information display
     const [popupInfo, setPopupInfo] = useState<{
@@ -57,6 +74,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
     // Reference to track current popup
     const currentPopupRef = React.useRef<any>(null);
+
+    const { theme } = useTheme();
 
     // Handler for changing view filter (cidade/bairro/sessao)
     const handleFilterChange = (filter: ViewFilter) => {
@@ -102,6 +121,90 @@ const MapComponent: React.FC<MapComponentProps> = ({
         fetchCityData();
     }, [selectedYear, sq_candidato, activeFilter]);
 
+    // Add effect to fetch voting section data
+    useEffect(() => {
+        const fetchSecaoData = async () => {
+            if (!selectedYear || !sq_candidato || activeFilter !== 'sessao') {
+                setSecaoData([]);
+                return;
+            }
+
+            try {
+                setIsLoadingMore(true);
+                const response = await fetch(
+                    `/api/votes/sections?candidateId=${sq_candidato}&year=${selectedYear}&limit=1000&offset=${secaoOffset}`
+                );
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    console.error('API Error:', result);
+                    throw new Error(result.error || 'Failed to load section data');
+                }
+                
+                if (!Array.isArray(result.data)) {
+                    throw new Error('Invalid data format received from API');
+                }
+
+                const validData = result.data.map((item: VotingSecaoData) => ({
+                    nr_secao: item.nr_secao,
+                    nr_local_votacao: item.nr_local_votacao,
+                    nm_local_votacao: item.nm_local_votacao,
+                    latitude: item.latitude,
+                    longitude: item.longitude,
+                    total_votos: item.total_votos,
+                    percentual_votos: item.percentual_votos,
+                    total_count: item.total_count // Add this line
+                }));
+
+                if (secaoOffset === 0) {
+                    setSecaoData(validData);
+                } else {
+                    setSecaoData(prev => [...prev, ...validData]);
+                }
+                
+                setError(null);
+
+                // Only center map on first load
+                if (result.data.length > 0 && secaoOffset === 0) {
+                    setViewState({
+                        latitude: result.data[0].latitude,
+                        longitude: result.data[0].longitude,
+                        zoom: 12
+                    });
+                }
+            } catch (err: any) {
+                console.error('Error fetching voting section data:', err);
+                setError(err.message || 'Failed to load voting section data');
+                if (secaoOffset === 0) {
+                    setSecaoData([]);
+                }
+            } finally {
+                setIsLoadingMore(false);
+            }
+        };
+
+        fetchSecaoData();
+    }, [selectedYear, sq_candidato, activeFilter, secaoOffset]);
+
+    // Add load more handler
+    const handleLoadMore = () => {
+        if (secaoData.length < secaoTotal && !isLoadingMore) {
+            setSecaoOffset(prev => prev + 1000);
+        }
+    };
+
+    // Add scroll handler for map container
+    const handleMapScroll = (e: any) => {
+        const map = e.target;
+        if (
+            map.getZoom() > 11 && // Only load more when zoomed in enough
+            !isLoadingMore &&
+            secaoData.length < secaoTotal
+        ) {
+            handleLoadMore();
+        }
+    };
+
     // Debug log for GeoJSON conversion
     useEffect(() => {
         console.log('Current cityData:', cityData);
@@ -117,6 +220,25 @@ const MapComponent: React.FC<MapComponentProps> = ({
                 votes: item.total_votos,
                 percentage: item.percentual_votos,
                 city: item.nm_municipio
+            },
+            geometry: {
+                type: 'Point',
+                coordinates: [item.longitude, item.latitude]
+            }
+        }))
+    };
+
+    // Add GeoJSON converter for voting sections
+    const secaoGeoJson = {
+        type: 'FeatureCollection',
+        features: secaoData.map((item) => ({
+            type: 'Feature',
+            properties: {
+                votes: item.total_votos,
+                percentage: item.percentual_votos,
+                name: `Seção ${item.nr_secao}`,
+                location: item.nm_local_votacao,
+                total_count: item.total_count // Add this line
             },
             geometry: {
                 type: 'Point',
@@ -222,6 +344,44 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
     };
 
+    // Add layer configurations for voting sections
+    const secaoCircleLayer: CircleLayer = {
+        id: 'secao-point',
+        type: 'circle',
+        source: 'secao-points',
+        paint: {
+            'circle-color': '#e74c3c',  // Different color from city points
+            'circle-radius': [
+                'interpolate',
+                ['linear'],
+                ['get', 'votes'],
+                0, 10,     // smaller circles for sections
+                100, 15,
+                500, 20
+            ],
+            'circle-opacity': 0.8,
+            'circle-stroke-width': 1,
+            'circle-stroke-color': '#ffffff'
+        }
+    };
+
+    const secaoLabelLayer: SymbolLayer = {
+        id: 'secao-label',
+        type: 'symbol',
+        source: 'secao-points',
+        layout: {
+            'text-field': displayFilter === 'votos' ?
+                ['to-string', ['get', 'votes']] :
+                ['concat', ['to-string', ['get', 'percentage']], '%'],
+            'text-size': 12,
+            'text-anchor': 'top',
+            'text-offset': [0, 1]
+        },
+        paint: {
+            'text-color': '#ffffff',
+        }
+    };
+
     // Add debug logs for render conditions
     useEffect(() => {
         console.log('Render conditions:', {
@@ -319,8 +479,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
                     <Map
                         {...viewState}
                         onMove={evt => setViewState(evt.viewState)}
+                        onZoom={handleMapScroll}
                         style={{ width: '100%', height: '100%' }}
-                        mapStyle="mapbox://styles/mapbox/dark-v11"
+                        mapStyle={theme === 'dark' ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/light-v10'}
                         mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN}
                         interactiveLayerIds={['city-cluster-circle', 'city-unclustered-point']}
                         onClick={handleClick}
@@ -342,6 +503,16 @@ const MapComponent: React.FC<MapComponentProps> = ({
                                 <Layer {...clusterLabelLayer} />
                                 <Layer {...unclusteredCircleLayer} />
                                 <Layer {...unclusteredLabelLayer} />
+                            </Source>
+                        )}
+                        {activeFilter === 'sessao' && secaoData.length > 0 && (
+                            <Source
+                                id="secao-points"
+                                type="geojson"
+                                data={secaoGeoJson}
+                            >
+                                <Layer {...secaoCircleLayer} />
+                                <Layer {...secaoLabelLayer} />
                             </Source>
                         )}
                         {popupInfo && (
@@ -382,6 +553,11 @@ const MapComponent: React.FC<MapComponentProps> = ({
                                 </div>
                             </Popup>
                         )}
+                        {isLoadingMore && (
+                            <div className="absolute bottom-4 left-4 bg-white p-2 rounded shadow">
+                                Carregando mais seções...
+                            </div>
+                        )}
                     </Map>
                     {error && <div className="text-red-500 absolute bottom-4 left-4 bg-white p-2 rounded">{error}</div>}
                 </div>
@@ -389,5 +565,4 @@ const MapComponent: React.FC<MapComponentProps> = ({
         </Card>
     );
 };
-
 export default MapComponent;

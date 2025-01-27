@@ -12,8 +12,7 @@ import { SelectDashboard } from "@/components/SelectDashboard";
 import DashboardVisaoGeralEleicoes from "@/components/dashboards/DashboardVisaoGeralEleicoes";
 import DashboardFilters from "@/components/dashboard-filters";
 import DashboardVisaoGeralIndividual from "@/components/dashboards/DashboardVisaoIndividual";
-
-// import DashboardComparativoCandidatos from "@/components/dashboards/DashboardComparativoCandidatos";
+import DashboardComparativoCandidatos from "@/components/dashboards/DashboardComparativoCandidatos";
 // import DashboardAutoComparativo from "@/components/dashboards/DashboardAutoComparativo";
 
 const DashboardPage = () => {
@@ -43,10 +42,10 @@ const DashboardPage = () => {
         switch (selectedDashboard) {
             case "visaoGeralEleicoes":
                 return <DashboardVisaoGeralEleicoes filters={filters} />;
-           case "visaoGeralIndividual":
-               return <DashboardVisaoGeralIndividual filters={filters} />; // Pass filters prop
-//            case "comparativoCandidatos":
-//                return <DashboardComparativoCandidatos />;
+            case "visaoGeralIndividual":
+                return <DashboardVisaoGeralIndividual filters={filters} />; // Pass filters prop
+            case "comparativoCandidatos":
+                return <DashboardComparativoCandidatos filters={filters} />; // Add filters prop here
 //            case "autoComparativo":
 //                return <DashboardAutoComparativo />;
             default:
