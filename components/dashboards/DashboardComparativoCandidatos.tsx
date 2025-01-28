@@ -5,11 +5,10 @@ import { CandidateSelect } from '../CandidateSelect-Comparativo';
 import { ComparisonCharts } from '../ComparisonCharts-Comparativo';
 import { CandidateCard } from '@/components/CandidateCard-Comparativo';
 import { CandidatoData } from '@/types/candidate';
-import { Button } from '@/components/ui/button'; // Import Button component
-import { Tooltip } from 'react-tooltip'; // Import Tooltip component
 import debounce from 'lodash.debounce';
-import { ColorPicker } from '@/components/ui/color-picker';
 import { CandidateStatsComparativo } from '@/components/CandidateStats-Comparativo';
+
+const colorOptions = ['blue', 'green', 'yellow', 'orange', 'red', 'purple', 'pink', 'teal', 'brown', 'gray'];
 
 interface Props {
     filters?: {
@@ -131,7 +130,8 @@ const DashboardComparativoCandidatos: React.FC<Props> = ({ filters = {} }) => {
         }
     };
 
-    const handleColorChange = (color: string, position: 'candidate1' | 'candidate2') => {
+    const handleColorSelect = (color: string, position: 'candidate1' | 'candidate2') => {
+        if (candidateColors.candidate1 === color || candidateColors.candidate2 === color) return;
         setCandidateColors(prev => ({
             ...prev,
             [position]: color
@@ -240,6 +240,28 @@ const DashboardComparativoCandidatos: React.FC<Props> = ({ filters = {} }) => {
         }
     };
 
+    const handleClearCandidate = (position: 'candidate1' | 'candidate2') => {
+        if (position === 'candidate1') {
+            setCandidateSearch1('');
+            setFilteredCandidates1([]);
+            setCandidate1Selected(false);
+            setSelectedCandidates(prev => ({
+                ...prev,
+                candidate1: undefined,
+                votingComparison: undefined // Clear comparison data
+            }));
+        } else {
+            setCandidateSearch2('');
+            setFilteredCandidates2([]);
+            setCandidate2Selected(false);
+            setSelectedCandidates(prev => ({
+                ...prev,
+                candidate2: undefined,
+                votingComparison: undefined // Clear comparison data
+            }));
+        }
+    };
+
     useEffect(() => {
         return () => {
             debouncedSearch1.cancel();
@@ -253,16 +275,27 @@ const DashboardComparativoCandidatos: React.FC<Props> = ({ filters = {} }) => {
     return (
         <div className="space-y-6">
             {/* Candidate Selection Section */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-gray-200 justify-center rounded-md ">
-                <div>
-                    <h3>Buscar Candidato 1</h3>
-                    <input
-                        type="text"
-                        value={candidateSearch1}
-                        onChange={handleSearch1Change}
-                        placeholder="Digite o nome do candidato..."
-                        className="w-full sm:w-[280px] p-2 border rounded"
-                    />
+            <div className="justify-self-center w-[95%] grid grid-cols-1 sm:grid-cols-2 gap-6 m-1 bg-gray-100 dark:bg-gray-800 p-4 rounded-md justify-items-center">
+                <div className='flex flex-row gap-4 align-middle'>
+                    <div className='flex flex-col gap-2'>
+                    <h3>Candidato 1</h3>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="text"
+                            value={candidateSearch1}
+                            onChange={handleSearch1Change}
+                            placeholder="Digite o nome do candidato..."
+                            className="w-full sm:w-[280px] p-2 border rounded"
+                        />
+                        {candidate1Selected && (
+                            <button
+                                onClick={() => handleClearCandidate('candidate1')}
+                                className="p-2 bg-red-500 text-white rounded hover:bg-red-600"
+                            >
+                                Limpar
+                            </button>
+                        )}
+                    </div>
                     {isSearching1 && <p>Buscando candidatos...</p>}
                     {!isSearching1 && filteredCandidates1.length === 0 && candidateSearch1 && candidateSearch1 !== '' && (
                         <p>Nenhum candidato encontrado.</p>
@@ -278,23 +311,38 @@ const DashboardComparativoCandidatos: React.FC<Props> = ({ filters = {} }) => {
                             </li>
                         ))}
                     </ul>
-                    <h3>Cor do Candidato 1</h3>
-                    <div className="flex gap-2">
-                        <ColorPicker
-                            color={candidateColors.candidate1}
-                            onChange={(color) => handleColorChange(color, 'candidate1')}
-                        />
+                    <div className="flex gap-2 mt-0">
+                        {colorOptions.map(color => (
+                            <div
+                                key={color}
+                                className={`w-5 h-7 rounded-sm cursor-pointer ${color === candidateColors.candidate1 ? 'border-2' : ''} ${color === candidateColors.candidate1 ? 'border-black dark:border-white' : ''}`}
+                                style={{ backgroundColor: color }}
+                                onClick={() => handleColorSelect(color, 'candidate1')}
+                            />
+                        ))}
+                    </div>
                     </div>
                 </div>
-                <div>
-                    <h3>Buscar Candidato 2</h3>
-                    <input
-                        type="text"
-                        value={candidateSearch2}
-                        onChange={handleSearch2Change}
-                        placeholder="Digite o nome do candidato..."
-                        className="w-full sm:w-[280px] p-2 border rounded"
-                    />
+                <div className='flex flex-row gap-4'>
+                <div className='flex flex-col gap-2'>
+                    <h3>Candidato 2</h3>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="text"
+                            value={candidateSearch2}
+                            onChange={handleSearch2Change}
+                            placeholder="Digite o nome do candidato..."
+                            className="w-full sm:w-[280px] p-2 border rounded"
+                        />
+                        {candidate2Selected && (
+                            <button
+                                onClick={() => handleClearCandidate('candidate2')}
+                                className="p-2 bg-red-500 text-white rounded hover:bg-red-600"
+                            >
+                                Limpar
+                            </button>
+                        )}
+                    </div>
                     {isSearching2 && <p>Buscando candidatos...</p>}
                     {!isSearching2 && filteredCandidates2.length === 0 && candidateSearch2 && candidateSearch2 !== '' && (
                         <p>Nenhum candidato encontrado.</p>
@@ -310,12 +358,16 @@ const DashboardComparativoCandidatos: React.FC<Props> = ({ filters = {} }) => {
                             </li>
                         ))}
                     </ul>
-                    <h3>Cor do Candidato 2</h3>
-                    <div className="flex gap-2">
-                        <ColorPicker
-                            color={candidateColors.candidate2}
-                            onChange={(color) => handleColorChange(color, 'candidate2')}
-                        />
+                    <div className="flex gap-2 mt-0">
+                        {colorOptions.map(color => (
+                            <div
+                                key={color}
+                                className={`w-5 h-7 rounded-sm cursor-pointer ${color === candidateColors.candidate2 ? 'border-2 border-gray' : ''}`}
+                                style={{ backgroundColor: color }}
+                                onClick={() => handleColorSelect(color, 'candidate2')}
+                            />
+                        ))}
+                    </div>
                     </div>
                 </div>
             </div>
@@ -325,13 +377,13 @@ const DashboardComparativoCandidatos: React.FC<Props> = ({ filters = {} }) => {
                 {selectedCandidates.candidate1 && (
                     <CandidateCard
                         candidate={selectedCandidates.candidate1}
-                        color={candidateColors.candidate1}
+                        color={`${candidateColors.candidate1}70`} // Apply 70% transparency
                     />
                 )}
                 {selectedCandidates.candidate2 && (
                     <CandidateCard
                         candidate={selectedCandidates.candidate2}
-                        color={candidateColors.candidate2}
+                        color={`${candidateColors.candidate2}70`} // Apply 70% transparency
                     />
                 )}
             </div>

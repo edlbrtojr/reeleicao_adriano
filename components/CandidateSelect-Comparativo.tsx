@@ -1,5 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { CandidatoData } from '@/types/candidate';
 import { supabase } from '@/utils/supabase/client';
 import debounce from 'lodash.debounce';
@@ -14,81 +13,57 @@ export const CandidateSelect: React.FC<CandidateSelectProps> = ({ year, onSelect
     const [searchTerm, setSearchTerm] = useState('');
     const [candidates, setCandidates] = useState<CandidatoData[]>([]);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const searchCandidates = async (query: string) => {
-        if (!year) {
-            console.log('No year provided, skipping search');
-            return;
-        }
-        
-        console.log('Starting candidate search with:', {
-            year,
-            query,
-            supabaseInitialized: !!supabase
-        });
-        
-        try {
-            setLoading(true);
-            console.log('Calling RPC search_candidates with params:', {
-                p_ano_eleicao: year,
-                p_nome_candidato: query,
-                p_limit: 10
-            });
+    // Debounced search function
+    const debouncedSearch = useMemo(
+        () =>
+            debounce(async (query: string) => {
+                if (!year) return;
 
-            const { data, error } = await supabase.rpc('search_candidates', {
-                p_ano_eleicao: year,
-                p_nome_candidato: query,
-                p_limit: 10
-            });
+                try {
+                    setLoading(true);
+                    setError(null);
 
-            console.log('RPC response:', { data, error });
+                    const { data, error: supabaseError } = await supabase.rpc('search_candidates', {
+                        p_ano_eleicao: year,
+                        p_nome_candidato: query,
+                        p_limit: 10,
+                    });
 
-            if (error) {
-                console.error('RPC error:', error);
-                return;
-            }
+                    if (supabaseError) {
+                        setError('Erro ao buscar candidatos. Tente novamente.');
+                        console.error('RPC error:', supabaseError);
+                        return;
+                    }
 
-            console.log('Setting candidates:', data);
-            setCandidates(data || []);
-        } catch (error) {
-            console.error('Search error:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Create memoized debounced search function
-    const debouncedSearch = useCallback(
-        debounce((value: string) => {
-            console.log('Debounced search triggered with:', value);
-            searchCandidates(value);
-        }, 300),
+                    setCandidates(data || []);
+                } catch (err) {
+                    setError('Erro inesperado. Tente novamente.');
+                    console.error('Search error:', err);
+                } finally {
+                    setLoading(false);
+                }
+            }, 300),
         [year]
     );
 
     // Handle input change
     const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const value = event.target.value;
-        console.log('Search input changed:', value);
         setSearchTerm(value);
         debouncedSearch(value);
     };
 
+    // Initial search on mount
     useEffect(() => {
-        console.log('Component mounted/updated with year:', year);
-        
-        // Initial search with empty string to get initial candidates
-        if (year) {
-            console.log('Performing initial search for year:', year);
-            searchCandidates('');
-        }
-        
-        // Cleanup
-        return () => {
-            console.log('Cleaning up search');
-            debouncedSearch.cancel();
-        };
-    }, [year]);
+        if (year) debouncedSearch('');
+    }, [year, debouncedSearch]);
+
+    // Cleanup debounce on unmount
+    useEffect(() => {
+        return () => debouncedSearch.cancel();
+    }, [debouncedSearch]);
 
     return (
         <div className="space-y-2">
@@ -112,33 +87,18 @@ export const CandidateSelect: React.FC<CandidateSelectProps> = ({ year, onSelect
                         Buscando candidatos...
                     </div>
                 )}
+                {error && (
+                    <div className="text-sm text-red-500 dark:text-red-400">
+                        {error}
+                    </div>
+                )}
                 <ul className="mt-2 max-h-60 overflow-y-auto rounded border border-gray-300 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-600">
                     {candidates.map(candidate => (
-                        <li
+                        <CandidateListItem
                             key={candidate.sq_candidato}
-                            onClick={() => {
-                                console.log('Selected candidate:', candidate);
-                                onSelect(candidate);
-                            }}
-                            className={`cursor-pointer p-2 transition-colors duration-200
-                                bg-white text-black dark:bg-gray-700 dark:text-white
-                                hover:bg-blue-500 hover:text-white
-                                dark:hover:bg-blue-700 dark:hover:text-white`}
-                        >
-                            <div className="flex justify-between items-center">
-                                <div>
-                                    <span className="font-medium">{candidate.nm_urna_candidato}</span>
-                                    <span className="ml-2 opacity-75">
-                                        ({candidate.nr_candidato} - {candidate.sg_partido})
-                                    </span>
-                                </div>
-                                {candidate.total_votos && candidate.total_votos > 0 && (
-                                    <span className="text-sm opacity-75">
-                                        {candidate.total_votos} votos
-                                    </span>
-                                )}
-                            </div>
-                        </li>
+                            candidate={candidate}
+                            onSelect={onSelect}
+                        />
                     ))}
                     {!loading && candidates.length === 0 && searchTerm && (
                         <li className="p-2 text-center text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800">
@@ -147,9 +107,36 @@ export const CandidateSelect: React.FC<CandidateSelectProps> = ({ year, onSelect
                     )}
                 </ul>
             </div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700">
-                {`Debug: Year=${year}, SearchTerm="${searchTerm}", Loading=${loading}, Candidates=${candidates.length}`}
-            </div>
         </div>
+    );
+};
+
+// Subcomponent for candidate list item
+const CandidateListItem: React.FC<{
+    candidate: CandidatoData;
+    onSelect: (candidate: CandidatoData) => void;
+}> = ({ candidate, onSelect }) => {
+    return (
+        <li
+            onClick={() => onSelect(candidate)}
+            className={`cursor-pointer p-2 transition-colors duration-200
+                bg-white text-black dark:bg-gray-700 dark:text-white
+                hover:bg-blue-500 hover:text-white
+                dark:hover:bg-blue-700 dark:hover:text-white`}
+        >
+            <div className="flex justify-between items-center">
+                <div>
+                    <span className="font-medium">{candidate.nm_urna_candidato}</span>
+                    <span className="ml-2 opacity-75">
+                        ({candidate.nr_candidato} - {candidate.sg_partido})
+                    </span>
+                </div>
+                {candidate.total_votos && candidate.total_votos > 0 && (
+                    <span className="text-sm opacity-75">
+                        {candidate.total_votos} votos
+                    </span>
+                )}
+            </div>
+        </li>
     );
 };

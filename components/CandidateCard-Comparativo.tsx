@@ -13,7 +13,6 @@ export function CandidateCard({ candidate, color = 'blue' }: CandidateCardProps)
     const [imageUrl, setImageUrl] = useState<string | null>(null);
 
     useEffect(() => {
-        // Debug log to verify all candidate data
         console.log('CandidateCard received data:', {
             nm_urna_candidato: candidate.nm_urna_candidato,
             nr_candidato: candidate.nr_candidato,
@@ -24,12 +23,10 @@ export function CandidateCard({ candidate, color = 'blue' }: CandidateCardProps)
     }, [candidate]);
 
     useEffect(() => {
-        // Debug log
         console.log('Candidate image URL:', candidate.img_candidato);
         
         if (candidate.img_candidato) {
             try {
-                // Validate URL
                 new URL(candidate.img_candidato);
                 setImageUrl(candidate.img_candidato);
             } catch (e) {
@@ -40,7 +37,7 @@ export function CandidateCard({ candidate, color = 'blue' }: CandidateCardProps)
     }, [candidate.img_candidato]);
 
     return (
-        <Card>
+        <Card style={{ backgroundColor: `${color}4D` }}> {/* 4D is the hex code for 30% opacity */}
             <CardHeader className="pb-2">
                 <div className="flex items-center space-x-4">
                     <div className="relative w-16 h-16">
@@ -54,7 +51,7 @@ export function CandidateCard({ candidate, color = 'blue' }: CandidateCardProps)
                                     console.error('Image failed to load:', imageUrl);
                                     setImageError(true);
                                 }}
-                                unoptimized // since these are external images
+                                unoptimized
                             />
                         ) : (
                             <div className="w-full h-full bg-gray-200 rounded-full flex items-center justify-center">
@@ -68,7 +65,7 @@ export function CandidateCard({ candidate, color = 'blue' }: CandidateCardProps)
                             {candidate.nr_candidato} - {candidate.sg_partido}
                         </p>
                         <p className="text-sm text-gray-500">
-                            {candidate.ds_cargo} {/* Display cargo information */}
+                            {candidate.ds_cargo}
                         </p>
                     </div>
                 </div>
