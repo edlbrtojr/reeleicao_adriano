@@ -99,10 +99,20 @@ export const CandidateSelect: React.FC<CandidateSelectProps> = ({ year, onSelect
                     value={searchTerm}
                     onChange={handleSearchChange}
                     placeholder="Digite o nome do candidato..."
-                    className="w-full p-2 border rounded"
+                    className={`w-full p-2 rounded border transition-colors duration-200
+                        ${loading ? 'bg-gray-50 text-gray-500' : 'bg-white text-black dark:bg-gray-700 dark:text-white'}
+                        ${loading ? 'border-gray-200' : 'border-gray-300 dark:border-gray-600'}
+                        hover:border-blue-500 dark:hover:border-blue-700
+                        focus:border-blue-500 dark:focus:border-blue-700
+                        focus:outline-none focus:ring-2 focus:ring-blue-500/50`}
+                    disabled={loading}
                 />
-                {loading && <div>Buscando candidatos...</div>}
-                <ul className="mt-2 max-h-60 overflow-y-auto border rounded">
+                {loading && (
+                    <div className="text-sm text-gray-500 dark:text-gray-400 animate-pulse">
+                        Buscando candidatos...
+                    </div>
+                )}
+                <ul className="mt-2 max-h-60 overflow-y-auto rounded border border-gray-300 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-600">
                     {candidates.map(candidate => (
                         <li
                             key={candidate.sq_candidato}
@@ -110,18 +120,34 @@ export const CandidateSelect: React.FC<CandidateSelectProps> = ({ year, onSelect
                                 console.log('Selected candidate:', candidate);
                                 onSelect(candidate);
                             }}
-                            className="cursor-pointer hover:bg-gray-100 p-2 border-b last:border-b-0"
+                            className={`cursor-pointer p-2 transition-colors duration-200
+                                bg-white text-black dark:bg-gray-700 dark:text-white
+                                hover:bg-blue-500 hover:text-white
+                                dark:hover:bg-blue-700 dark:hover:text-white`}
                         >
-                            {candidate.nm_urna_candidato} ({candidate.nr_candidato} - {candidate.sg_partido})
-                            {candidate.total_votos && candidate.total_votos > 0 && ` - ${candidate.total_votos} votos`}
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <span className="font-medium">{candidate.nm_urna_candidato}</span>
+                                    <span className="ml-2 opacity-75">
+                                        ({candidate.nr_candidato} - {candidate.sg_partido})
+                                    </span>
+                                </div>
+                                {candidate.total_votos && candidate.total_votos > 0 && (
+                                    <span className="text-sm opacity-75">
+                                        {candidate.total_votos} votos
+                                    </span>
+                                )}
+                            </div>
                         </li>
                     ))}
                     {!loading && candidates.length === 0 && searchTerm && (
-                        <li className="p-2 text-gray-500">Nenhum candidato encontrado</li>
+                        <li className="p-2 text-center text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800">
+                            Nenhum candidato encontrado
+                        </li>
                     )}
                 </ul>
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700">
                 {`Debug: Year=${year}, SearchTerm="${searchTerm}", Loading=${loading}, Candidates=${candidates.length}`}
             </div>
         </div>

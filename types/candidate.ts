@@ -5,7 +5,6 @@ export interface CandidatoData {
     nr_candidato: number;
     sg_partido: string;
     img_candidato?: string;
-    // Make optional fields since they may not be present in search results
     ano_eleicao?: number;
     cd_cargo?: number;
     ds_cargo?: string;

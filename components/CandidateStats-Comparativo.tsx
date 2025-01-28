@@ -35,11 +35,12 @@ export const CandidateStatsComparativo: React.FC<CandidateStatsComparativoProps>
 
       setLoading(true);
       try {
-        // Get total votes
+        // Get total votes - add p_cd_municipio parameter
         const { data: votesData, error: votesError } = await supabase
           .rpc('get_candidate_total_votes', {
             p_sq_candidato: candidateId,
-            p_ano_eleicao: 2022
+            p_ano_eleicao: 2022,
+            p_cd_municipio: null  // Add this parameter
           });
 
         if (votesError) {

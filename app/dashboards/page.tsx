@@ -53,6 +53,10 @@ const DashboardPage = () => {
         }
     };
 
+    const shouldShowFilters = () => {
+        return selectedDashboard !== "comparativoCandidatos";
+    };
+
     return (
         <>
         <div className="p-4 w-full">
@@ -68,7 +72,15 @@ const DashboardPage = () => {
         <div>
           <SelectDashboard onChange={(value) => setSelectedDashboard(value)} />
         </div>
-      </div><div className="flex mb-4"></div><DashboardFilters onChange={handleFilterChange} selectedDashboard={selectedDashboard} /> {/* Add selectedDashboard prop */}
+      </div>
+      <div className="flex mb-4">
+        {shouldShowFilters() && (
+            <DashboardFilters 
+                onChange={handleFilterChange} 
+                selectedDashboard={selectedDashboard} 
+            />
+        )}
+      </div>
           <div>
             {renderDashboard()}
           </div>

@@ -55,14 +55,31 @@ const CandidateStats: React.FC<Props> = ({ candidateId, year, municipio, cargo }
                         p_cd_cargo: cargo || null
                     });
 
-                // Get total expenses
-                const { data: expensesData } = await supabase
+                // Get total expenses with enhanced logging
+                console.log('Fetching expenses for:', {
+                    candidateId: Number(candidateId),
+                    year: year
+                });
+                
+                const { data: expensesData, error: expensesError } = await supabase
                     .rpc('get_candidate_total_expenses', {
-                        p_sq_candidato: candidateId,
+                        p_sq_candidato: Number(candidateId), // Convert bigint to number
                         p_ano_eleicao: year
                     });
 
-                setStats({
+                if (expensesError) {
+                    console.error('Error fetching expenses:', expensesError);
+                    console.error('Error details:', {
+                        message: expensesError.message,
+                        details: expensesError.details,
+                        hint: expensesError.hint
+                    });
+                }
+
+                console.log('Raw expenses data:', expensesData);
+
+                setStats(prevStats => ({
+                    ...(prevStats || {}),
                     totalVotes: votesData?.[0]?.total_votos || 0,
                     topCity: {
                         name: cityData?.[0]?.nm_municipio || '',
@@ -70,7 +87,8 @@ const CandidateStats: React.FC<Props> = ({ candidateId, year, municipio, cargo }
                     },
                     votePercentage: percentageData?.[0]?.percentage || 0,
                     totalExpenses: expensesData?.[0]?.total_expenses || 0
-                });
+                }));
+
             } catch (error) {
                 console.error('Error fetching stats:', error);
             } finally {

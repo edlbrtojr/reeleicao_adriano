@@ -84,6 +84,7 @@ const DashboardComparativoCandidatos: React.FC<Props> = ({ filters = {} }) => {
     };
 
     const handleCandidateSelect = async (candidate: CandidatoData, position: 'candidate1' | 'candidate2') => {
+        console.log('Selected candidate data:', candidate); // Add this line
         try {
             if (position === 'candidate1') {
                 setCandidateSearch1(candidate.nm_urna_candidato);
@@ -151,7 +152,15 @@ const DashboardComparativoCandidatos: React.FC<Props> = ({ filters = {} }) => {
 
                 const { data, error } = await supabase
                     .from('candidatos')
-                    .select('sq_candidato, nm_candidato, nm_urna_candidato, nr_candidato, sg_partido')
+                    .select(`
+                        sq_candidato,
+                        nm_candidato,
+                        nm_urna_candidato,
+                        nr_candidato,
+                        sg_partido,
+                        ds_cargo,
+                        img_candidato
+                    `)
                     .eq('ano_eleicao', filters.selectedYear)
                     .ilike('nm_urna_candidato', `%${searchTerm}%`)
                     .limit(10);
@@ -184,7 +193,15 @@ const DashboardComparativoCandidatos: React.FC<Props> = ({ filters = {} }) => {
 
                 const { data, error } = await supabase
                     .from('candidatos')
-                    .select('sq_candidato, nm_candidato, nm_urna_candidato, nr_candidato, sg_partido')
+                    .select(`
+                        sq_candidato,
+                        nm_candidato,
+                        nm_urna_candidato,
+                        nr_candidato,
+                        sg_partido,
+                        ds_cargo,
+                        img_candidato
+                    `)
                     .eq('ano_eleicao', filters.selectedYear)
                     .ilike('nm_urna_candidato', `%${searchTerm}%`)
                     .limit(10);
@@ -236,7 +253,7 @@ const DashboardComparativoCandidatos: React.FC<Props> = ({ filters = {} }) => {
     return (
         <div className="space-y-6">
             {/* Candidate Selection Section */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-gray-200 justify-center rounded-md ">
                 <div>
                     <h3>Buscar Candidato 1</h3>
                     <input
