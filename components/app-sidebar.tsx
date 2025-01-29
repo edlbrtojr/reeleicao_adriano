@@ -1,5 +1,3 @@
-import Dashboard from "@/app/dashboards/page"
-import page from "@/app/page"
 import {
   Sidebar,
   SidebarContent,
@@ -15,7 +13,7 @@ import {
 
   } from "@/components/ui/sidebar"
 import { url } from "inspector"
-import { ChartAreaIcon, Home, SmileIcon } from "lucide-react"
+import { ChartAreaIcon, Home, SmileIcon, FileUserIcon} from "lucide-react"
 import { ThemeProvider } from "next-themes"
 import { ThemeSwitcher } from "./theme-switcher"
 import Link from "next/link"
@@ -31,6 +29,12 @@ import Link from "next/link"
       title: "Dashboard Eleicoes Anteriores",
       icon: ChartAreaIcon,
       url: "/dashboards"
+    },
+
+    {
+      title: "Eleitorado",
+      icon: FileUserIcon,
+      url: "/eleitorado"
     }
   ]
   

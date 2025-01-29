@@ -7,8 +7,9 @@ import { CandidateCard } from '@/components/CandidateCard-Comparativo';
 import { CandidatoData } from '@/types/candidate';
 import debounce from 'lodash.debounce';
 import { CandidateStatsComparativo } from '@/components/CandidateStats-Comparativo';
+import ComparativeMapComponent from '../ComparativeMapComponent';
 
-const colorOptions = ['blue', 'green', 'yellow', 'orange', 'red', 'purple', 'pink', 'teal', 'brown', 'gray'];
+const colorOptions = ['DeepSkyBlue', 'green', 'yellow', 'orange', 'red', 'purple', 'pink', 'teal', 'brown', 'gray'];
 
 interface Props {
     filters?: {
@@ -33,7 +34,7 @@ interface ComparisonData {
 const DashboardComparativoCandidatos: React.FC<Props> = ({ filters = {} }) => {
     const [selectedCandidates, setSelectedCandidates] = useState<ComparisonData>({});
     const [candidateColors, setCandidateColors] = useState({
-        candidate1: 'blue', // Default blue
+        candidate1: 'DeepSkyBlue', // Default blue
         candidate2: 'red'  // Default red
     });
     const [loading, setLoading] = useState(false);
@@ -412,22 +413,32 @@ const DashboardComparativoCandidatos: React.FC<Props> = ({ filters = {} }) => {
                 />
             )}
 
-            {/* Candidate Map Comparison 
+            {/* Candidate Map Comparison */}
+            <div className='w-full h-50%'>
             {selectedCandidates.candidate1 && selectedCandidates.candidate2 && (
+                
                 <ComparativeMapComponent
                     selectedYear={filters.selectedYear || 2022}
                     candidate1={{
-                        sq_candidato: Number(selectedCandidates.candidate1.sq_candidato),
+                        sq_candidato: BigInt(selectedCandidates.candidate1.sq_candidato),
+                        nm_candidato: selectedCandidates.candidate1.nm_candidato,
+                        nr_candidato: selectedCandidates.candidate1.nr_candidato,
+                        sg_partido: selectedCandidates.candidate1.sg_partido,
                         nm_urna_candidato: selectedCandidates.candidate1.nm_urna_candidato,
                         color: candidateColors.candidate1
                     }}
                     candidate2={{
-                        sq_candidato: Number(selectedCandidates.candidate2.sq_candidato),
+                        sq_candidato: BigInt(selectedCandidates.candidate2.sq_candidato),
+                        nm_candidato: selectedCandidates.candidate2.nm_candidato,
+                        nr_candidato: selectedCandidates.candidate2.nr_candidato,
+                        sg_partido: selectedCandidates.candidate2.sg_partido,
                         nm_urna_candidato: selectedCandidates.candidate2.nm_urna_candidato,
                         color: candidateColors.candidate2
                     }}
                 />
-            )}*/}
+
+            )}
+            </div>
         </div>
     );
 };
